@@ -3,11 +3,13 @@ import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { CatalogFilters } from "@/components/CatalogFilters";
 import {
-  getCategoryFilters,
-  listNavigableCategories,
-  searchCatalogItems,
   serializeOfferPrice,
 } from "@/modules/catalog/queries";
+import {
+  cachedCategoryFilters,
+  cachedListNavigableCategories,
+  cachedSearchCatalogItems,
+} from "@/modules/catalog/cached";
 import { prisma } from "@/lib/db";
 import type { CatalogItemKind } from "@prisma/client";
 
@@ -48,11 +50,11 @@ export async function CatalogPage({
   const sp = await searchParams;
   const params = parseParams(kind, sp);
   const [categories, result, cities, units, attrFilters] = await Promise.all([
-    listNavigableCategories(kind),
-    searchCatalogItems(params),
+    cachedListNavigableCategories(kind),
+    cachedSearchCatalogItems(params),
     prisma.city.findMany({ orderBy: { nameRu: "asc" } }),
     prisma.unit.findMany({ orderBy: { code: "asc" } }),
-    getCategoryFilters(params.category),
+    cachedCategoryFilters(params.category),
   ]);
 
   const basePath =

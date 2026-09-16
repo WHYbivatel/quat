@@ -255,6 +255,12 @@ export async function createPublicLinkAction(formData: FormData): Promise<OkRev 
         ? Number(formData.get("expiresInDays"))
         : 30,
     });
+    const { invalidateCache } = await import("@/modules/cache/invalidate");
+    const { cacheTags } = await import("@/modules/cache/tags");
+    await invalidateCache({
+      tags: [cacheTags.publicEstimate(link.id)],
+      paths: [`/p/${link.token}`],
+    });
     return { ok: true, revision: 0, token: link.token };
   } catch (e) {
     return fail(e);
@@ -265,9 +271,15 @@ export async function revokePublicLinkAction(formData: FormData): Promise<OkRev 
   const userId = await uid();
   if (!userId) return { ok: false, error: "Нужен вход" };
   try {
-    await revokePublicLink({
+    const link = await revokePublicLink({
       userId,
       linkId: String(formData.get("linkId") ?? ""),
+    });
+    const { invalidateCache } = await import("@/modules/cache/invalidate");
+    const { cacheTags } = await import("@/modules/cache/tags");
+    await invalidateCache({
+      tags: [cacheTags.publicEstimate(link.id)],
+      paths: [`/p/${link.token}`],
     });
     return { ok: true, revision: 0 };
   } catch (e) {

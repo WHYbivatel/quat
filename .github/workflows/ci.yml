@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - name: Production build
+        env:
+          GIT_SHA: ${{ github.sha }}
+          DEPLOYMENT_ID: ci-${{ github.sha }}
+          BUILD_TIME: ${{ github.event.head_commit.timestamp }}
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+          AUTH_SECRET: ci-secret-not-for-production-use-32b
+        run: pnpm build
+
+  # Template: enable when staging SSH secrets are configured.
+  # deploy:
+  #   needs: verify
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Deploy release dir
+  #       env:
+  #         SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+  #         HOST: ${{ secrets.STAGING_HOST }}
+  #       run: |
+  #         # ssh ... 'APP_ROOT=/var/www/quat.esl.kz ./scripts/deploy-release.sh'
+  #         echo "Configure secrets then uncomment"

@@ -2,7 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { invalidateCache } from "@/modules/cache/invalidate";
+import { cacheTags } from "@/modules/cache/tags";
 import { upsertCategory, upsertUnit, updateTemplate } from "@/modules/administration/refs";
 import {
   addOrganizationVerification,
@@ -40,7 +41,10 @@ export async function upsertCategoryAction(formData: FormData) {
     isNavigable: formData.get("isNavigable") === "1",
     sortOrder: Number(formData.get("sortOrder") || 0),
   });
-  revalidatePath("/app/admin/categories");
+  await invalidateCache({
+    tags: [cacheTags.catalog, cacheTags.sitemap],
+    paths: ["/app/admin/categories", "/catalog/products", "/catalog/services"],
+  });
   redirect("/app/admin/categories");
 }
 
@@ -53,7 +57,10 @@ export async function upsertUnitAction(formData: FormData) {
     nameRu: String(formData.get("nameRu") ?? ""),
     dimension: String(formData.get("dimension") || "") || null,
   });
-  revalidatePath("/app/admin/units");
+  await invalidateCache({
+    tags: [cacheTags.catalog],
+    paths: ["/app/admin/units"],
+  });
   redirect("/app/admin/units");
 }
 
@@ -64,7 +71,7 @@ export async function updateTemplateAction(formData: FormData) {
     nameRu: String(formData.get("nameRu") ?? ""),
     description: String(formData.get("description") || "") || null,
   });
-  revalidatePath("/app/admin/templates");
+  await invalidateCache({ paths: ["/app/admin/templates"] });
   redirect("/app/admin/templates");
 }
 
@@ -81,7 +88,7 @@ export async function addVerificationAction(formData: FormData) {
     documentName: String(formData.get("documentName") || "") || null,
     notes: String(formData.get("notes") || "") || null,
   });
-  revalidatePath("/app/admin/companies");
+  await invalidateCache({ paths: ["/app/admin/companies"] });
   redirect("/app/admin/companies");
 }
 
@@ -93,22 +100,26 @@ export async function setOrgStatusAction(formData: FormData) {
     String(formData.get("organizationId") ?? ""),
     String(formData.get("status") ?? "active") as "active" | "suspended",
   );
-  revalidatePath("/app/admin/companies");
+  await invalidateCache({ paths: ["/app/admin/companies"] });
   redirect("/app/admin/companies");
 }
 
 export async function moderateOfferAction(formData: FormData) {
   const userId = await uid();
   if (!userId) throw new Error("Нужен вход");
+  const offerId = String(formData.get("offerId") ?? "");
   await setOfferModeration({
     userId,
-    offerId: String(formData.get("offerId") ?? ""),
+    offerId,
     status: String(formData.get("status") ?? "approved") as
       | "approved"
       | "rejected"
       | "pending",
   });
-  revalidatePath("/app/admin/moderation");
+  await invalidateCache({
+    tags: [cacheTags.catalog, cacheTags.offer(offerId)],
+    paths: ["/app/admin/moderation", "/catalog/products", "/catalog/services"],
+  });
   redirect("/app/admin/moderation");
 }
 
@@ -169,7 +180,14 @@ export async function commitImportAction(formData: FormData) {
     jobId,
     rowNumbers: onlyValid ? undefined : rowNumbers,
   });
-  revalidatePath("/app/admin/import");
+  await invalidateCache({
+    tags: [cacheTags.catalog, cacheTags.sitemap],
+    paths: [
+      "/app/admin/import",
+      "/catalog/products",
+      "/catalog/services",
+    ],
+  });
   redirect(`/app/admin/import/${jobId}?done=1`);
 }
 

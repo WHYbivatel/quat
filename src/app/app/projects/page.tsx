@@ -73,6 +73,12 @@ async function createProjectAction(formData: FormData) {
       idempotencyKey,
       organizationId,
     });
+    const { invalidateCache } = await import("@/modules/cache/invalidate");
+    const { cacheTags } = await import("@/modules/cache/tags");
+    await invalidateCache({
+      tags: [cacheTags.organizationProjects(project.organizationId)],
+      paths: ["/app/projects"],
+    });
     const estimate = await ensureDraftEstimate(session.user.id, project.id);
     if (templateCode) {
       const fd = new FormData();

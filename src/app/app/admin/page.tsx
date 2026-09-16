@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
 import { auth } from "@/lib/auth";
+import { getBuildInfo } from "@/lib/build-info";
 import { requirePlatformAdmin } from "@/modules/organizations/access";
 
 const sections = [
@@ -21,6 +22,7 @@ export default async function AdminHomePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   await requirePlatformAdmin(session.user.id);
+  const build = getBuildInfo();
 
   return (
     <>
@@ -30,6 +32,12 @@ export default async function AdminHomePage() {
         <p className="mt-1 text-sm text-[var(--muted)]">
           Справочники, модерация, импорт. Загруженный файл сам по себе не означает
           проверенную лицензию.
+        </p>
+        <p className="mt-2 font-mono text-xs text-[var(--muted)]">
+          app {build.version} · {build.gitShaShort} · {build.deploymentId} ·{" "}
+          <Link href="/api/version" className="underline">
+            /api/version
+          </Link>
         </p>
         <ul className="mt-8 grid gap-3 sm:grid-cols-2">
           {sections.map((s) => (

@@ -2,7 +2,8 @@ import { prisma } from "@/lib/db";
 import { ELEKTRIK24, ETL_XXI, type CuratedRow } from "./curated-data";
 import { fingerprint } from "./http";
 import type { ListingLifecycle, Prisma } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { invalidateCache } from "@/modules/cache/invalidate";
+import { cacheTags } from "@/modules/cache/tags";
 
 const PARSER_VERSION = "curated-manual-v1";
 
@@ -54,6 +55,22 @@ function rowToPrices(row: CuratedRow) {
 }
 
 export async function publishCuratedPublicSources(opts?: {
+  actorUserId?: string | null;
+}) {
+  const locked = await prisma.$queryRaw<Array<{ ok: boolean }>>`
+    SELECT pg_try_advisory_lock(hashtext('quathub:publish-curated')) AS ok
+  `;
+  if (!locked[0]?.ok) {
+    throw new Error("Публикация источников уже выполняется на другом экземпляре");
+  }
+  try {
+    return await publishCuratedPublicSourcesInner(opts);
+  } finally {
+    await prisma.$queryRaw`SELECT pg_advisory_unlock(hashtext('quathub:publish-curated'))`;
+  }
+}
+
+async function publishCuratedPublicSourcesInner(opts?: {
   actorUserId?: string | null;
 }) {
   await ensureUnits();
@@ -265,13 +282,13 @@ export async function publishCuratedPublicSources(opts?: {
     },
   });
 
-  try {
-    revalidatePath("/catalog/services");
-    revalidatePath("/catalog/products");
-    revalidatePath("/app/admin/sources");
-  } catch {
-    // ignore outside next request context
-  }
+  await invalidateCache(
+    {
+      tags: [cacheTags.catalog, cacheTags.sitemap],
+      paths: ["/catalog/services", "/catalog/products", "/app/admin/sources"],
+    },
+    "background",
+  );
 
   return { added, changed, versionId: version.id };
 }

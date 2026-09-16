@@ -118,7 +118,7 @@ export async function markViewedAction(requestId: string) {
 export async function updateOfferAction(formData: FormData) {
   const userId = await uid();
   if (!userId) throw new Error("Нужен вход");
-  await updateOwnOffer({
+  const offer = await updateOwnOffer({
     userId,
     offerId: String(formData.get("offerId") ?? ""),
     data: {
@@ -135,6 +135,21 @@ export async function updateOfferAction(formData: FormData) {
       validUntil: String(formData.get("validUntil") ?? "") || null,
       unknownPriceReason: String(formData.get("unknownPriceReason") ?? "") || null,
     },
+  });
+  const { invalidateCache } = await import("@/modules/cache/invalidate");
+  const { cacheTags } = await import("@/modules/cache/tags");
+  await invalidateCache({
+    tags: [
+      cacheTags.catalog,
+      cacheTags.offer(offer.id),
+      cacheTags.item(offer.catalogItemId),
+    ],
+    paths: [
+      `/catalog/items/${offer.catalogItemId}`,
+      "/catalog/products",
+      "/catalog/services",
+      "/suppliers",
+    ],
   });
   const { redirect } = await import("next/navigation");
   redirect("/app/supplier/offers");

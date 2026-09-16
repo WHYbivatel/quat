@@ -908,3 +908,17 @@ model CatalogDataVersion {
   @@map("catalog_data_versions")
 }
 
+model CacheInvalidationJob {
+  id          String    @id @default(cuid())
+  tags        String[]  @default([])
+  paths       String[]  @default([])
+  status      String    @default("pending")
+  attempts    Int       @default(0)
+  lastError   String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  processedAt DateTime? @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@map("cache_invalidation_jobs")
+}
+
