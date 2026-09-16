@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
@@ -11,14 +12,39 @@ import {
   ConflictError,
   VersionBlockedError,
 } from "@/modules/estimates/versions";
+import { contentDispositionAttachment } from "@/modules/exports/http";
+import { exportUserMessages } from "@/modules/exports/messages";
+import {
+  checkPdfBrowserPresent,
+  invalidatePdfRuntimeCache,
+} from "@/modules/exports/runtime";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+function jsonError(
+  status: number,
+  error: string,
+  requestId: string,
+  extra?: Record<string, unknown>,
+) {
+  return NextResponse.json(
+    { error, requestId, ...extra },
+    {
+      status,
+      headers: {
+        "Cache-Control": "no-store",
+        "X-Request-Id": requestId,
+      },
+    },
+  );
+}
+
 export async function POST(req: NextRequest) {
+  const requestId = req.headers.get("x-request-id") || randomUUID();
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return jsonError(401, exportUserMessages.unauthorized, requestId);
   }
 
   const body = (await req.json()) as {
@@ -31,7 +57,16 @@ export async function POST(req: NextRequest) {
   const format = body.format ?? "pdf";
   const variant = body.variant ?? "client";
   if (!body.estimateId || body.expectedRevision == null) {
-    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    return jsonError(400, "Не указаны estimateId или revision", requestId);
+  }
+
+  if (format === "pdf") {
+    const pdf = await checkPdfBrowserPresent();
+    if (!pdf.ok) {
+      return jsonError(503, exportUserMessages.pdfUnavailable, requestId, {
+        featureId: "estimate.export_draft_pdf",
+      });
+    }
   }
 
   try {
@@ -46,28 +81,35 @@ export async function POST(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": result.contentType,
-        "Content-Disposition": `attachment; filename="${result.filename}"`,
+        "Content-Disposition": contentDispositionAttachment(result.filename),
         "X-Checksum-SHA256": result.checksum,
+        "X-Request-Id": requestId,
+        "X-Draft-Revision": String(result.draftRevision),
         "Cache-Control": "no-store",
       },
     });
   } catch (e) {
     if (e instanceof ConflictError || e instanceof VersionBlockedError) {
-      return NextResponse.json({ error: e.message }, { status: 409 });
+      return jsonError(409, e.message, requestId);
     }
     if (e instanceof ExportRateLimitError) {
-      return NextResponse.json({ error: e.message }, { status: 429 });
+      return jsonError(429, e.message, requestId);
     }
     if (e instanceof ExportTooLargeError) {
-      return NextResponse.json({ error: e.message }, { status: 413 });
+      return jsonError(413, e.message, requestId);
     }
     if (e instanceof AccessDeniedError) {
-      return NextResponse.json({ error: e.message }, { status: 403 });
+      return jsonError(403, e.message, requestId);
     }
     if (e instanceof NotFoundError) {
-      return NextResponse.json({ error: e.message }, { status: 404 });
+      return jsonError(404, e.message, requestId);
     }
-    console.error(e);
-    return NextResponse.json({ error: "Export failed" }, { status: 500 });
+    console.error(`[export-draft ${requestId}]`, e);
+    if (format === "pdf") invalidatePdfRuntimeCache();
+    return jsonError(
+      500,
+      format === "pdf" ? exportUserMessages.pdfFailed : exportUserMessages.failed,
+      requestId,
+    );
   }
 }

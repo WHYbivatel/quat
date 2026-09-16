@@ -46,8 +46,32 @@ type PriceDiff = {
 type Warning = { lineId: string; message: string };
 
 type ActionResult =
-  | { ok: true; revision: number; href?: string; versionId?: string; token?: string }
+  | {
+      ok: true;
+      revision: number;
+      href?: string;
+      versionId?: string;
+      versionNumber?: number;
+      token?: string;
+    }
   | { ok: false; error: string; conflict?: boolean };
+
+type PdfFeedback =
+  | { kind: "idle" }
+  | { kind: "working"; label: string }
+  | { kind: "success"; label: string }
+  | { kind: "error"; label: string; requestId?: string; detail?: string };
+
+type IssueFeedback =
+  | { kind: "idle" }
+  | { kind: "working" }
+  | {
+      kind: "success";
+      versionId: string;
+      versionNumber: number;
+      href: string;
+    }
+  | { kind: "error"; label: string };
 
 type Props = {
   projectId: string;
@@ -96,7 +120,9 @@ export function EstimateWorkspace(props: Props) {
   const [tab, setTab] = useState<"catalog" | "estimate" | "total">("estimate");
   const [view, setView] = useState<"internal" | "client">(props.view);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [issueFeedback, setIssueFeedback] = useState<IssueFeedback>({ kind: "idle" });
+  const [pdfFeedback, setPdfFeedback] = useState<PdfFeedback>({ kind: "idle" });
   const [pending, startTransition] = useTransition();
   const [priceDiffs, setPriceDiffs] = useState<PriceDiff[] | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
@@ -104,6 +130,9 @@ export function EstimateWorkspace(props: Props) {
   const revision = Math.max(props.draftRevision, clientRevision);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfFallbackUrl, setPdfFallbackUrl] = useState<string | null>(null);
+  const [pdfUnavailable, setPdfUnavailable] = useState(false);
+  const pdfStatusId = "preview-pdf-status";
+  const issueStatusId = "issue-version-status";
 
   const tabs = useMemo(
     () =>
@@ -115,41 +144,167 @@ export function EstimateWorkspace(props: Props) {
     [],
   );
 
-  function run(fn: () => Promise<ActionResult>, opts?: { reload?: boolean }) {
-    setSaveState("saving");
-    setMessage(null);
+  function run(
+    fn: () => Promise<ActionResult>,
+    opts?: { reload?: boolean; kind?: "save" | "issue" },
+  ) {
+    const kind = opts?.kind ?? "save";
+    if (kind === "issue") {
+      setIssueFeedback({ kind: "working" });
+    } else {
+      setSaveState("saving");
+      setSaveMessage(null);
+    }
     startTransition(async () => {
       const res = await fn();
       if (!res.ok) {
-        setSaveState("error");
-        setMessage(
-          res.conflict
-            ? res.error ||
+        if (kind === "issue") {
+          setIssueFeedback({
+            kind: "error",
+            label: res.conflict
+              ? res.error ||
                 "На сервере есть более новая редакция сметы. Обновите страницу и повторите."
-            : res.error,
-        );
+              : res.error,
+          });
+        } else {
+          setSaveState("error");
+          setSaveMessage(
+            res.conflict
+              ? res.error ||
+                  "На сервере есть более новая редакция сметы. Обновите страницу и повторите."
+              : res.error,
+          );
+        }
         return;
       }
       if (typeof res.revision === "number" && res.revision > 0) {
         setClientRevision(res.revision);
       }
-      setSaveState("saved");
-      if (res.versionId) {
-        setMessage(`Версия создана. Открыть карточку версии.`);
-      }
-      if (res.href && res.versionId) {
-        // Keep editor; offer navigation via message link below
-      } else if (res.href) {
-        router.push(res.href);
-        return;
+      if (kind === "issue" && res.versionId && res.href) {
+        setIssueFeedback({
+          kind: "success",
+          versionId: res.versionId,
+          versionNumber: res.versionNumber ?? 0,
+          href: res.href,
+        });
+        setSaveState("saved");
+      } else {
+        setSaveState("saved");
       }
       if (res.token) {
         setPublicUrl(`${window.location.origin}/p/${res.token}`);
+      }
+      if (res.href && !res.versionId) {
+        router.push(res.href);
+        return;
       }
       if (opts?.reload !== false) {
         router.refresh();
       }
     });
+  }
+
+  async function downloadDraft(format: "pdf" | "xlsx" | "docx" | "csv") {
+    if (pdfBusy) return;
+    if (format === "pdf" && pdfUnavailable) return;
+    setPdfBusy(true);
+    setPdfFeedback({
+      kind: "working",
+      label: format === "pdf" ? "Подготавливаем PDF…" : `Подготавливаем ${format.toUpperCase()}…`,
+    });
+    if (format === "pdf" && pdfFallbackUrl) {
+      URL.revokeObjectURL(pdfFallbackUrl);
+      setPdfFallbackUrl(null);
+    }
+    try {
+      const res = await fetch("/api/exports/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          estimateId: props.estimateId,
+          expectedRevision: revision,
+          format,
+          variant: view === "internal" ? "internal" : "client",
+        }),
+      });
+      const ctype = res.headers.get("content-type") || "";
+      const requestId = res.headers.get("x-request-id") || undefined;
+      if (!res.ok) {
+        let error =
+          format === "pdf"
+            ? "Не удалось подготовить PDF. Повторите."
+            : "Не удалось подготовить документ.";
+        let detail: string | undefined;
+        let bodyRequestId = requestId;
+        if (ctype.includes("application/json")) {
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+            requestId?: string;
+          };
+          if (body.error) error = body.error;
+          bodyRequestId = body.requestId || requestId;
+          if (res.status === 503) {
+            setPdfUnavailable(true);
+            detail = "Генератор PDF недоступен на этом стенде.";
+          }
+        } else {
+          error = `Ошибка экспорта (${res.status}). Повторите.`;
+        }
+        setPdfFeedback({
+          kind: "error",
+          label:
+            error === "Export failed"
+              ? "Не удалось подготовить PDF. Повторите."
+              : error,
+          requestId: bodyRequestId,
+          detail,
+        });
+        return;
+      }
+      if (format === "pdf" && !ctype.includes("application/pdf")) {
+        setPdfFeedback({
+          kind: "error",
+          label: "Сервер вернул не PDF. Повторите.",
+          requestId,
+        });
+        return;
+      }
+      const blob = await res.blob();
+      if (format === "pdf") {
+        if (blob.size < 5 || !(await blob.slice(0, 4).text()).startsWith("%PDF")) {
+          setPdfFeedback({
+            kind: "error",
+            label: "Получен повреждённый PDF. Повторите.",
+            requestId,
+          });
+          return;
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      if (format === "pdf") setPdfFallbackUrl(url);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `estimate-draft-r${revision}.${format}`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      if (format !== "pdf") URL.revokeObjectURL(url);
+      setPdfFeedback({
+        kind: "success",
+        label: format === "pdf" ? "PDF готов" : `${format.toUpperCase()} готов`,
+      });
+    } catch {
+      setPdfFeedback({
+        kind: "error",
+        label:
+          format === "pdf"
+            ? "Не удалось подготовить PDF. Повторите."
+            : "Не удалось подготовить документ.",
+      });
+    } finally {
+      setPdfBusy(false);
+    }
   }
 
   return (
@@ -194,12 +349,12 @@ export function EstimateWorkspace(props: Props) {
             </button>
           </div>
         </div>
-        {message ? (
+        {saveMessage ? (
           <p
             className={`mt-2 text-sm ${saveState === "error" ? "text-[var(--danger)]" : "text-[var(--muted)]"}`}
             role="alert"
           >
-            {message}
+            {saveMessage}
           </p>
         ) : null}
         {props.warnings.length > 0 ? (
@@ -552,13 +707,14 @@ export function EstimateWorkspace(props: Props) {
             <button
               type="button"
               className="w-full rounded-md bg-[var(--accent)] px-3 py-2 font-semibold text-white disabled:opacity-50"
-              disabled={props.blockedForFixed}
+              disabled={props.blockedForFixed || issueFeedback.kind === "working"}
+              aria-describedby={issueStatusId}
               onClick={() => {
                 const fd = new FormData();
                 fd.set("estimateId", props.estimateId);
                 fd.set("expectedRevision", String(revision));
                 fd.set("idempotencyKey", `issue:${props.estimateId}:r${revision}:0`);
-                run(() => props.actions.issueVersion(fd));
+                run(() => props.actions.issueVersion(fd), { kind: "issue" });
               }}
             >
               Выпустить версию
@@ -567,95 +723,106 @@ export function EstimateWorkspace(props: Props) {
               <button
                 type="button"
                 className="w-full rounded-md border border-[var(--border)] px-3 py-2"
+                aria-describedby={issueStatusId}
                 onClick={() => {
                   const fd = new FormData();
                   fd.set("estimateId", props.estimateId);
                   fd.set("expectedRevision", String(revision));
                   fd.set("allowPreliminary", "1");
                   fd.set("idempotencyKey", `issue:${props.estimateId}:r${revision}:1`);
-                  run(() => props.actions.issueVersion(fd));
+                  run(() => props.actions.issueVersion(fd), { kind: "issue" });
                 }}
               >
                 Предварительная версия
               </button>
             ) : null}
+            <div id={issueStatusId} className="space-y-1" aria-live="polite">
+              {issueFeedback.kind === "working" ? (
+                <p className="text-xs text-[var(--muted)]">Выпускаем версию…</p>
+              ) : null}
+              {issueFeedback.kind === "error" ? (
+                <p className="text-xs text-[var(--danger)]" role="alert">
+                  {issueFeedback.label}
+                </p>
+              ) : null}
+              {issueFeedback.kind === "success" ? (
+                <div className="rounded-md border border-[var(--border)] bg-[var(--bg)] p-2">
+                  <p className="text-xs">
+                    Версия №{issueFeedback.versionNumber || "?"} создана
+                  </p>
+                  <Link
+                    href={issueFeedback.href}
+                    className="mt-1 inline-block text-sm font-semibold text-[var(--accent)] underline"
+                  >
+                    Открыть версию №{issueFeedback.versionNumber || ""}
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+
             <button
               type="button"
               className="w-full rounded-md border border-[var(--border)] px-3 py-2 disabled:opacity-50"
-              disabled={pdfBusy || pending}
+              disabled={pdfBusy || pending || pdfUnavailable}
+              aria-describedby={pdfStatusId}
               onClick={() => {
-                if (pdfBusy) return;
-                setPdfBusy(true);
-                setSaveState("saving");
-                setMessage(null);
-                if (pdfFallbackUrl) {
-                  URL.revokeObjectURL(pdfFallbackUrl);
-                  setPdfFallbackUrl(null);
-                }
-                startTransition(async () => {
-                  try {
-                    const res = await fetch("/api/exports/draft", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        estimateId: props.estimateId,
-                        expectedRevision: revision,
-                        format: "pdf",
-                        variant: view === "internal" ? "internal" : "client",
-                      }),
-                    });
-                    const ctype = res.headers.get("content-type") || "";
-                    if (!res.ok) {
-                      setSaveState("error");
-                      if (ctype.includes("application/json")) {
-                        setMessage((await res.json().catch(() => ({}))).error ?? "Ошибка экспорта");
-                      } else {
-                        setMessage(`Ошибка экспорта (${res.status}). Повторите.`);
-                      }
-                      return;
-                    }
-                    if (!ctype.includes("application/pdf")) {
-                      setSaveState("error");
-                      setMessage("Сервер вернул не PDF. Повторите или проверьте журнал.");
-                      return;
-                    }
-                    const blob = await res.blob();
-                    if (blob.size < 5 || !(await blob.slice(0, 4).text()).startsWith("%PDF")) {
-                      setSaveState("error");
-                      setMessage("Получен повреждённый PDF. Повторите.");
-                      return;
-                    }
-                    const url = URL.createObjectURL(blob);
-                    setPdfFallbackUrl(url);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `estimate-draft-r${revision}.pdf`;
-                    a.rel = "noopener";
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    setSaveState("saved");
-                    setMessage("PDF готов. Если загрузка не началась — откройте ссылку ниже.");
-                  } catch {
-                    setSaveState("error");
-                    setMessage("Не удалось подготовить PDF. Повторите.");
-                  } finally {
-                    setPdfBusy(false);
-                  }
+                startTransition(() => {
+                  void downloadDraft("pdf");
                 });
               }}
             >
-              {pdfBusy ? "Подготовка PDF…" : "PDF предварительный"}
+              {pdfUnavailable
+                ? "PDF временно недоступен на этом стенде"
+                : pdfBusy && pdfFeedback.kind === "working"
+                  ? "Подготавливаем PDF…"
+                  : "PDF предварительный"}
             </button>
-            {pdfFallbackUrl ? (
-              <a
-                href={pdfFallbackUrl}
-                download={`estimate-draft-r${revision}.pdf`}
-                className="block text-center text-sm text-[var(--accent)] underline"
-              >
-                Скачать PDF ещё раз
-              </a>
-            ) : null}
+            <div id={pdfStatusId} className="space-y-1" aria-live="polite">
+              {pdfFeedback.kind === "working" ? (
+                <p className="text-xs text-[var(--muted)]">{pdfFeedback.label}</p>
+              ) : null}
+              {pdfFeedback.kind === "success" ? (
+                <p className="text-xs text-[var(--muted)]">{pdfFeedback.label}</p>
+              ) : null}
+              {pdfFeedback.kind === "error" ? (
+                <div className="rounded-md border border-[var(--danger)]/40 p-2" role="alert">
+                  <p className="text-xs text-[var(--danger)]">{pdfFeedback.label}</p>
+                  {pdfFeedback.requestId ? (
+                    <p className="mt-1 text-[10px] text-[var(--muted)]">
+                      Код обращения: {pdfFeedback.requestId}
+                    </p>
+                  ) : null}
+                  {pdfFeedback.detail ? (
+                    <details className="mt-1 text-[10px] text-[var(--muted)]">
+                      <summary className="cursor-pointer underline">Подробнее</summary>
+                      <p className="mt-1">{pdfFeedback.detail}</p>
+                    </details>
+                  ) : null}
+                  {!pdfUnavailable ? (
+                    <button
+                      type="button"
+                      className="mt-1 text-xs text-[var(--accent)] underline"
+                      onClick={() => {
+                        startTransition(() => {
+                          void downloadDraft("pdf");
+                        });
+                      }}
+                    >
+                      Повторить
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              {pdfFallbackUrl ? (
+                <a
+                  href={pdfFallbackUrl}
+                  download={`estimate-draft-r${revision}.pdf`}
+                  className="block text-sm text-[var(--accent)] underline"
+                >
+                  Скачать ещё раз
+                </a>
+              ) : null}
+            </div>
             <div className="flex flex-wrap gap-2">
               {(["xlsx", "docx", "csv"] as const).map((format) => (
                 <button
@@ -664,52 +831,8 @@ export function EstimateWorkspace(props: Props) {
                   className="flex-1 rounded-md border border-[var(--border)] px-2 py-1.5 text-xs disabled:opacity-50"
                   disabled={pdfBusy || pending}
                   onClick={() => {
-                    if (pdfBusy) return;
-                    setPdfBusy(true);
-                    setSaveState("saving");
-                    setMessage(null);
-                    startTransition(async () => {
-                      try {
-                        const res = await fetch("/api/exports/draft", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            estimateId: props.estimateId,
-                            expectedRevision: revision,
-                            format,
-                            variant: view === "internal" ? "internal" : "client",
-                          }),
-                        });
-                        if (!res.ok) {
-                          setSaveState("error");
-                          const ctype = res.headers.get("content-type") || "";
-                          if (ctype.includes("application/json")) {
-                            setMessage(
-                              (await res.json().catch(() => ({}))).error ?? "Ошибка экспорта",
-                            );
-                          } else {
-                            setMessage(`Ошибка экспорта (${res.status}).`);
-                          }
-                          return;
-                        }
-                        const blob = await res.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `estimate-draft-r${revision}.${format}`;
-                        a.rel = "noopener";
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        URL.revokeObjectURL(url);
-                        setSaveState("saved");
-                        setMessage(`${format.toUpperCase()} готов.`);
-                      } catch {
-                        setSaveState("error");
-                        setMessage(`Не удалось подготовить ${format.toUpperCase()}.`);
-                      } finally {
-                        setPdfBusy(false);
-                      }
+                    startTransition(() => {
+                      void downloadDraft(format);
                     });
                   }}
                 >
@@ -778,7 +901,7 @@ export function EstimateWorkspace(props: Props) {
             </div>
           ) : null}
 
-          <div className="mt-6">
+          <div className="mt-6" id="versions">
             <h3 className="text-sm font-semibold">История версий</h3>
             <ul className="mt-2 space-y-2 text-xs">
               {props.versions.length === 0 ? (

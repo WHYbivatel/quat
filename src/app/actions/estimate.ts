@@ -26,7 +26,14 @@ import {
 import { AccessDeniedError, NotFoundError } from "@/lib/permissions";
 import { addCatalogItemToDraft } from "@/modules/estimates/draft";
 
-type OkRev = { ok: true; revision: number; href?: string; versionId?: string; token?: string };
+type OkRev = {
+  ok: true;
+  revision: number;
+  href?: string;
+  versionId?: string;
+  versionNumber?: number;
+  token?: string;
+};
 type Err = { ok: false; error: string; conflict?: boolean };
 
 function fail(e: unknown): Err {
@@ -244,6 +251,7 @@ export async function issueVersionAction(formData: FormData): Promise<OkRev | Er
       ok: true,
       revision: result.draftRevision,
       versionId: result.version.id,
+      versionNumber: result.version.versionNumber,
       href: `/app/versions/${result.version.id}`,
     };
   } catch (e) {

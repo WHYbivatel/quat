@@ -62,6 +62,12 @@ export default async function VersionPage({
           <Link href={`/app/projects/${version.estimate.projectId}/estimates/${version.estimateId}`}>
             ← К черновику
           </Link>
+          {" · "}
+          <Link
+            href={`/app/projects/${version.estimate.projectId}/estimates/${version.estimateId}#versions`}
+          >
+            К списку версий
+          </Link>
         </p>
         <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl">
           Версия {version.versionNumber}
