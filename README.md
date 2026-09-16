@@ -62,7 +62,7 @@ pnpm dev
 
 ## Релиз
 
-1. CI на push/PR: typecheck, lint, test, build (`.github/workflows/ci.yml`).
+1. CI (шаблон): скопировать `deploy/ci.github-actions.yml` → `.github/workflows/ci.yml` (нужен token со scope `workflow`).
 2. Сборка пишет неизменяемый `build-info.json` (`APP_VERSION` / `GIT_SHA` / `BUILD_TIME` / `DEPLOYMENT_ID`).
 3. Staging/prod: `pnpm db:migrate:deploy`, затем новая сборка; seed не автоматически.
 4. Целевой VPS-путь: `scripts/deploy-release.sh` (отдельный release-dir + health по `DEPLOYMENT_ID`). Пока на quat.esl.kz допустим контролируемый SSH-деплой; in-place `git pull` не считать целевой моделью.

@@ -25,7 +25,7 @@
 - `cacheTags` + `invalidateCache` + `CacheInvalidationJob` outbox
 - Каталог через `unstable_cache` (tags, 60s); мутации адресно инвалидируют
 - Cache-Control headers в `next.config.ts`; пример Nginx
-- CI `.github/workflows/ci.yml`; шаблон `scripts/deploy-release.sh`
+- CI шаблон `deploy/ci.github-actions.yml`; шаблон `scripts/deploy-release.sh`
 - README: Релиз / версия / кэш / rollback; `CHANGELOG.md`
 - Advisory lock на curated publish; SW не добавлялся
 

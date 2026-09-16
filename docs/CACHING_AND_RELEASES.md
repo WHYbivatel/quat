@@ -50,7 +50,7 @@
 
 Сборка пишет `build-info.json` (`scripts/write-build-info.mjs`): `version`, `gitSha`, `buildTime`, `deploymentId`. Runtime **не** вызывает git.
 
-Целевой pipeline: `.github/workflows/ci.yml` + `scripts/deploy-release.sh` (release-dir, migrate deploy, health check по `DEPLOYMENT_ID`). На текущем staging основной путь ещё может быть ручным/SSH; template описан в README.
+Целевой pipeline: `deploy/ci.github-actions.yml` + `scripts/deploy-release.sh` (release-dir, migrate deploy, health check по `DEPLOYMENT_ID`). На текущем staging основной путь ещё может быть ручным/SSH; template описан в README.
 
 ## Nginx
 
