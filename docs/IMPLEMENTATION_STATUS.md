@@ -1,46 +1,39 @@
 # QuatHub — Implementation Status
 
 **Обновлено:** 2026-09-16  
-**Текущий этап:** Промпт 7 завершён → далее Промпт 8
+**Текущий этап:** Промпт 7R завершён → далее 7A
 
 ## 1. Состояние репозитория
 
-| Факт | Значение |
-|---|---|
-| Админ | `/app/admin/*` (platform_admin) |
-| Импорт | CSV/XLSX preview → commit; шаблон `/api/admin/import-template` |
-| Audit | `AuditEvent` без секретов |
-| Verification | источник + дата; файл ≠ verified |
+Стенд: https://quat.esl.kz · GitHub: WHYbivatel/quat
 
 ## 2. Результаты этапов
 
-### Промпт 0–6 ✅
+### Промпт 0–7 ✅
 
-### Промпт 7 — Админка и импорт прайсов ✅
+### Промпт 7R — Исправления создания проекта / каталог / вход ✅
 
-**Сделано:**
-- Справочники: категории, единицы, регионы, шаблоны; компании + verification; moderation queue; фильтры offers `stale` / `no_price`.
-- Импорт: шаблон → upload → column mapping → preview с ошибками по строкам → commit только валидных (без needs_review) либо cancel; транзакция; `source=import`, moderation pending.
-- Сопоставление: supplierSku → update; catalogSku / exact name+unit → match; похожее имя → needs_review (без авто-merge).
-- Пустая цена → on_request (не 0); decimal comma; formula text sanitized; лимиты размера/строк; rate limit.
-- Снимки смет не меняются при импорте.
+**Причина ERROR 3822074729 (подтверждена логами стенда):**  
+`AccessDeniedError: Missing permission: project:write` — создание проекта под ролью без права (например `supplier_manager`), необработанное исключение → 500 Next.js digest.
 
-**Проверено:**
-- `pnpm test` 50/50; typecheck; lint; build OK.
-- Повторный импорт обновляет цену без дубля; bad unit; comma; on_request; sku conflict; dangerous text; buyer denied; snapshot intact.
+**Исправлено:**
+- Понятная RU-ошибка вместо 500; форма создания скрыта без `project:write`; подсказка сменить org / buyer.
+- Idempotency key на создании проекта; переключатель организаций; создание org если нет membership.
+- `/app` — ссылки на товары/услуги/проекты, не только форма.
+- Логин: «В каталог», логотип на главную; если уже вошли — Продолжить / Выйти.
+- Шапка: Выйти на desktop/mobile; org name; админ-ссылка только platform_admin.
+- Пустая смета: «Выбрать товары/услуги»; кнопки + из списка проектов.
+- Стабильный `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (пример в `.env.example`).
 
-**Ограничения:**
-- Импорт UI в MVP — у platform_admin (не отдельный кабинет поставщика).
-- Регион из файла не привязывается к OfferRegion автоматически.
-- Атрибуты категорий — просмотр через seed; отдельный CRUD атрибутов минимален.
+**Проверено:** tests 53/53; typecheck; lint; build. Регресс: supplier denied, buyer idempotent, foreign orgId rejected.
 
 ## 3. Следующий этап
 
-**Промпт 8:** аудит MVP, e2e-путь, README/пилот.
+**7A** — реальные публичные услуги/цены (по реестру источников). Затем 7B → 8 → 9.
 
-## 4. Журнал проверок
+## 4. Журнал
 
-| Дата | Этап | Что проверено | Результат |
-|---|---|---|---|
-| 2026-09-16 | 0–6 | prep…requests | OK |
-| 2026-09-16 | 7 | import/reimport, ACL, snapshot safety | OK |
+| Дата | Этап | Результат |
+|---|---|---|
+| 2026-09-16 | 0–7 | OK |
+| 2026-09-16 | 7R | OK — root cause digest 3822074729 = project:write |
