@@ -6,28 +6,26 @@
 
 ## 1. Состояние репозитория
 
-Репозиторий на момент подготовки **пустой**. Создаём проект с нуля по рекомендованному стеку.
+Репозиторий инициализирован в Prompt 1 (модульный монолит в корне).
 
 ## 2. Стек (MVP)
 
-| Слой | Выбор | Примечание |
+| Слой | Выбор | Версия / примечание |
 |---|---|---|
-| Language | TypeScript (strict) | |
-| App | Next.js App Router | актуальная стабильная LTS/stable на момент Prompt 1 |
-| UI | Tailwind CSS + shadcn/ui | светлая рабочая поверхность |
-| DB | PostgreSQL | |
-| ORM | Prisma | миграции только через Prisma Migrate |
-| Auth | Auth.js (NextAuth v5) | без самописной криптографии |
-| Validation | Zod | на границах API/Server Actions |
-| Money | `decimal.js` (или Prisma Decimal + Decimal.js) | запрет JS `Number` для денег |
-| PDF | Playwright `page.pdf` | HTML-шаблон + встроенные шрифты |
-| XLSX | ExcelJS | настоящие книги |
-| DOCX | docx | настоящие Word-документы |
-| CSV | собственный безопасный writer | UTF-8, formula injection guard |
-| Tests | Vitest (unit/domain) + Playwright (e2e) | |
-| Package manager | pnpm | lockfile обязателен |
+| Language | TypeScript (strict) | 5.9 |
+| App | Next.js App Router | 16.3.5 |
+| UI | Tailwind CSS (+ shadcn позже) | Tailwind 4; shadcn — с Prompt 2 |
+| DB | PostgreSQL | локальный |
+| ORM | Prisma | **6.19.0** (не RC 7/8) |
+| Auth | Auth.js (next-auth) | 5.0.0-beta.32, credentials |
+| Validation | Zod | 4.x |
+| Money | decimal.js | 10.x; Decimal в JSON строками |
+| PDF / XLSX / DOCX | Playwright / ExcelJS / docx | с Prompt 5 |
+| Tests | Vitest | 3.2.x |
+| Package manager | pnpm | 12.4.2, lockfile |
 
-Версии пакетов фиксируются в Prompt 1 после проверки совместимости; здесь — целевой стек.
+### Отклонения
+- Prisma 6.x вместо последних RC: стабильные migrate + знакомый `schema.prisma` datasource url.
 
 ## 3. Архитектурный стиль
 

@@ -1,0 +1,777 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum OrganizationType {
+  buyer
+  supplier
+  contractor
+  mixed
+}
+
+enum OrganizationStatus {
+  active
+  suspended
+}
+
+enum MembershipRole {
+  owner
+  admin
+  estimator
+  buyer
+  supplier_manager
+  viewer
+  platform_admin
+}
+
+enum CatalogItemKind {
+  product
+  service
+}
+
+enum CatalogItemStatus {
+  active
+  archived
+}
+
+enum AttributeValueType {
+  text
+  number
+  boolean
+  enum
+}
+
+enum PriceType {
+  fixed
+  from
+  range
+  on_request
+}
+
+enum VatMode {
+  included
+  excluded
+  zero
+  not_specified
+}
+
+enum AvailabilityStatus {
+  in_stock
+  made_to_order
+  limited
+  unknown
+}
+
+enum OfferSource {
+  manual
+  import
+  api
+}
+
+enum ModerationStatus {
+  draft
+  pending
+  approved
+  rejected
+}
+
+enum CostType {
+  equipment
+  material
+  labor
+  machinery
+  logistics
+  other
+}
+
+enum EstimateStatus {
+  draft
+  archived
+}
+
+enum ProposalStatus {
+  prepared
+  sent
+  accepted
+  declined
+}
+
+enum DocumentKind {
+  commercial_preliminary
+  commercial_fixed
+}
+
+enum ConfirmationStatus {
+  draft
+  confirmed
+  pending_quote
+}
+
+enum AdjustmentType {
+  amount
+  percent
+}
+
+enum RequestStatus {
+  draft
+  submitted
+  viewed
+  responded
+  accepted
+  declined
+  cancelled
+}
+
+enum ExportFormat {
+  pdf
+  xlsx
+  docx
+  csv
+}
+
+enum ExportVariant {
+  client
+  internal
+}
+
+enum ExportStatus {
+  queued
+  running
+  ready
+  failed
+}
+
+// ─── Identity ────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  locale       String   @default("ru")
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  memberships          Membership[]
+  issuedVersions       EstimateVersion[]    @relation("IssuedBy")
+  createdPublicLinks   PublicEstimateLink[] @relation("CreatedBy")
+  auditEvents          AuditEvent[]
+  exportArtifacts      ExportArtifact[]
+  activeOrgSessions    UserSession[]
+  verificationsCreated OrganizationVerification[]
+  importJobs           ImportJob[]
+
+  @@map("users")
+}
+
+model UserSession {
+  id                   String   @id @default(cuid())
+  userId               String
+  activeOrganizationId String?
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganization Organization? @relation(fields: [activeOrganizationId], references: [id], onDelete: SetNull)
+
+  @@unique([userId])
+  @@map("user_sessions")
+}
+
+model Organization {
+  id        String             @id @default(cuid())
+  name      String
+  type      OrganizationType
+  bin       String?
+  timezone  String             @default("Asia/Almaty")
+  isDemo    Boolean            @default(false)
+  status    OrganizationStatus @default(active)
+  createdAt DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime           @updatedAt @db.Timestamptz(3)
+
+  memberships         Membership[]
+  projects            Project[]
+  offers              Offer[]
+  buyerRequests       ProcurementRequest[] @relation("BuyerOrg")
+  supplierRequests    ProcurementRequest[] @relation("SupplierOrg")
+  templates           EstimateTemplate[]
+  auditEvents         AuditEvent[]
+  userSessions        UserSession[]
+  lineSupplierRefs    EstimateLine[]       @relation("LineSupplier")
+  verifications       OrganizationVerification[]
+  importJobs          ImportJob[]
+
+  @@map("organizations")
+}
+
+model Membership {
+  id             String         @id @default(cuid())
+  userId         String
+  organizationId String
+  role           MembershipRole
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+// ─── Geo & Catalog refs ──────────────────────────────────────────────────────
+
+model Region {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  nameRu    String
+  nameKk    String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  cities City[]
+  offers OfferRegion[]
+
+  @@map("regions")
+}
+
+model City {
+  id        String   @id @default(cuid())
+  regionId  String
+  code      String   @unique
+  nameRu    String
+  nameKk    String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  region   Region    @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  projects Project[]
+  offers   OfferCity[]
+
+  @@index([regionId])
+  @@map("cities")
+}
+
+model Unit {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  nameRu      String
+  nameKk      String?
+  dimension   String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  catalogItems         CatalogItem[]
+  attributeDefinitions AttributeDefinition[]
+
+  @@map("units")
+}
+
+model Category {
+  id          String          @id @default(cuid())
+  parentId    String?
+  slug        String          @unique
+  nameRu      String
+  nameKk      String?
+  kind        CatalogItemKind
+  isNavigable Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+
+  parent     Category?              @relation("CategoryTree", fields: [parentId], references: [id])
+  children   Category[]             @relation("CategoryTree")
+  items      CatalogItem[]
+  attributes CategoryAttribute[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model AttributeDefinition {
+  id               String             @id @default(cuid())
+  code             String             @unique
+  nameRu           String
+  nameKk           String?
+  valueType        AttributeValueType
+  normalizedUnitId String?
+  enumOptions      Json?
+  sortOrder        Int                @default(0)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+
+  normalizedUnit Unit?                @relation(fields: [normalizedUnitId], references: [id])
+  categories     CategoryAttribute[]
+  itemValues     CatalogItemAttribute[]
+
+  @@map("attribute_definitions")
+}
+
+model CategoryAttribute {
+  categoryId            String
+  attributeDefinitionId String
+  isFilterable          Boolean @default(true)
+  sortOrder             Int     @default(0)
+
+  category            Category            @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  attributeDefinition AttributeDefinition @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
+
+  @@id([categoryId, attributeDefinitionId])
+  @@map("category_attributes")
+}
+
+model CatalogItem {
+  id           String            @id @default(cuid())
+  kind         CatalogItemKind
+  categoryId   String
+  name         String
+  sku          String?           @unique
+  model        String?
+  baseUnitId   String
+  description  String?
+  serviceScope Json?
+  status       CatalogItemStatus @default(active)
+  isDemo       Boolean           @default(false)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
+
+  category   Category               @relation(fields: [categoryId], references: [id])
+  baseUnit   Unit                   @relation(fields: [baseUnitId], references: [id])
+  attributes CatalogItemAttribute[]
+  offers     Offer[]
+  lines      EstimateLine[]
+  altResponses SupplierResponse[]   @relation("AltItem")
+
+  @@index([categoryId])
+  @@index([kind, status])
+  @@map("catalog_items")
+}
+
+model CatalogItemAttribute {
+  id                    String  @id @default(cuid())
+  catalogItemId         String
+  attributeDefinitionId String
+  value                 Json
+  normalizedValue       Decimal? @db.Decimal(24, 8)
+
+  catalogItem         CatalogItem         @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  attributeDefinition AttributeDefinition @relation(fields: [attributeDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogItemId, attributeDefinitionId])
+  @@index([attributeDefinitionId])
+  @@map("catalog_item_attributes")
+}
+
+// ─── Offers ──────────────────────────────────────────────────────────────────
+
+model Offer {
+  id                     String             @id @default(cuid())
+  supplierOrganizationId String
+  catalogItemId          String
+  priceType              PriceType
+  price                  Decimal?           @db.Decimal(18, 4)
+  priceMin               Decimal?           @db.Decimal(18, 4)
+  priceMax               Decimal?           @db.Decimal(18, 4)
+  currency               String             @default("KZT") @db.Char(3)
+  inputVatMode           VatMode            @default(not_specified)
+  inputVatRate           Decimal?           @db.Decimal(8, 4)
+  unknownPriceReason     String?
+  availability           AvailabilityStatus @default(unknown)
+  moq                    Decimal?           @db.Decimal(18, 4)
+  packQty                Decimal?           @db.Decimal(18, 4)
+  leadTimeDays           Int?
+  source                 OfferSource        @default(manual)
+  validFrom              DateTime?          @db.Timestamptz(3)
+  validUntil             DateTime?          @db.Timestamptz(3)
+  moderationStatus       ModerationStatus   @default(approved)
+  supplierSku            String?
+  isDemo                 Boolean            @default(false)
+  createdAt              DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime           @updatedAt @db.Timestamptz(3)
+
+  supplier    Organization @relation(fields: [supplierOrganizationId], references: [id])
+  catalogItem CatalogItem  @relation(fields: [catalogItemId], references: [id])
+  regions     OfferRegion[]
+  cities      OfferCity[]
+  lines       EstimateLine[]
+
+  @@unique([supplierOrganizationId, supplierSku])
+  @@index([catalogItemId])
+  @@index([supplierOrganizationId])
+  @@index([validUntil])
+  @@map("offers")
+}
+
+model OfferRegion {
+  offerId  String
+  regionId String
+
+  offer  Offer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  region Region @relation(fields: [regionId], references: [id], onDelete: Cascade)
+
+  @@id([offerId, regionId])
+  @@map("offer_regions")
+}
+
+model OfferCity {
+  offerId String
+  cityId  String
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  city  City  @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+  @@id([offerId, cityId])
+  @@map("offer_cities")
+}
+
+// ─── Projects & Estimates ────────────────────────────────────────────────────
+
+model Project {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  cityId         String?
+  objectName     String?
+  objectAddress  String?
+  clientName     String?
+  clientContacts Json?
+  description    String?
+  assumptions    String?
+  timezone       String   @default("Asia/Almaty")
+  status         String   @default("active")
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  city         City?        @relation(fields: [cityId], references: [id])
+  estimates    Estimate[]
+
+  @@index([organizationId])
+  @@map("projects")
+}
+
+model Estimate {
+  id                        String         @id @default(cuid())
+  projectId                 String
+  number                    String
+  title                     String
+  currency                  String         @default("KZT") @db.Char(3)
+  draftRevision             Int            @default(1)
+  status                    EstimateStatus @default(draft)
+  proposalStatus            ProposalStatus @default(prepared)
+  calculationPolicyVersion  String         @default("commercial-v1")
+  terms                     String?
+  exclusions                String?
+  offerValidUntil           DateTime?      @db.Timestamptz(3)
+  createdAt                 DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime       @updatedAt @db.Timestamptz(3)
+
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sections    EstimateSection[]
+  lines       EstimateLine[]
+  adjustments Adjustment[]
+  versions    EstimateVersion[]
+
+  @@unique([projectId, number])
+  @@index([projectId])
+  @@map("estimates")
+}
+
+model EstimateSection {
+  id         String   @id @default(cuid())
+  estimateId String
+  title      String
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  estimate Estimate       @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  lines    EstimateLine[]
+
+  @@index([estimateId])
+  @@map("estimate_sections")
+}
+
+model EstimateLine {
+  id                      String              @id @default(cuid())
+  estimateId              String
+  sectionId               String?
+  catalogItemId           String?
+  offerId                 String?
+  sortOrder               Int                 @default(0)
+  costType                CostType
+  nameSnapshot            String
+  unitSnapshot            String
+  qty                     Decimal             @db.Decimal(18, 6)
+  purchaseQty             Decimal?            @db.Decimal(18, 6)
+  unitPurchasePrice       Decimal?            @db.Decimal(18, 4)
+  purchaseVatMode         VatMode?
+  purchaseVatRate         Decimal?            @db.Decimal(8, 4)
+  unitSalePrice           Decimal?            @db.Decimal(18, 4)
+  saleVatMode             VatMode?
+  saleVatRate             Decimal?            @db.Decimal(8, 4)
+  priceType               PriceType?
+  confirmationStatus      ConfirmationStatus  @default(draft)
+  discountPercent         Decimal?            @db.Decimal(8, 4)
+  discountAmount          Decimal?            @db.Decimal(18, 4)
+  markupPercent           Decimal?            @db.Decimal(8, 4)
+  targetMarginPercent     Decimal?            @db.Decimal(8, 4)
+  supplierOrganizationId  String?
+  supplierNameSnapshot    String?
+  sourceLabel             String?
+  sourcedAt               DateTime?           @db.Timestamptz(3)
+  unknownPriceReason      String?
+  manualOverrideReason    String?
+  includedInServiceLineId String?
+  notesInternal           String?
+  createdAt               DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime            @updatedAt @db.Timestamptz(3)
+
+  estimate             Estimate       @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  section              EstimateSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  catalogItem          CatalogItem?   @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  offer                Offer?         @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  supplierOrganization Organization?  @relation("LineSupplier", fields: [supplierOrganizationId], references: [id], onDelete: SetNull)
+  includedInService    EstimateLine?  @relation("ServiceInclusion", fields: [includedInServiceLineId], references: [id])
+  includedMaterials    EstimateLine[] @relation("ServiceInclusion")
+  requestLines         RequestLine[]
+
+  @@index([estimateId])
+  @@index([sectionId])
+  @@map("estimate_lines")
+}
+
+model Adjustment {
+  id         String         @id @default(cuid())
+  estimateId String
+  name       String
+  type       AdjustmentType
+  value      Decimal        @db.Decimal(18, 4)
+  baseLineIds Json
+  vatMode    VatMode        @default(not_specified)
+  vatRate    Decimal?       @db.Decimal(8, 4)
+  applyOrder Int            @default(0)
+  costType   CostType       @default(other)
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+
+  @@index([estimateId])
+  @@map("adjustments")
+}
+
+model EstimateVersion {
+  id                       String       @id @default(cuid())
+  estimateId               String
+  versionNumber            Int
+  issuedAt                 DateTime     @default(now()) @db.Timestamptz(3)
+  issuedById               String?
+  snapshot                 Json
+  calcResult               Json
+  calculationPolicyVersion String
+  documentKind             DocumentKind @default(commercial_fixed)
+  immutable                Boolean      @default(true)
+
+  estimate            Estimate             @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  issuedBy            User?                @relation("IssuedBy", fields: [issuedById], references: [id], onDelete: SetNull)
+  publicLinks         PublicEstimateLink[]
+  procurementRequests ProcurementRequest[]
+  exportArtifacts     ExportArtifact[]
+
+  @@unique([estimateId, versionNumber])
+  @@map("estimate_versions")
+}
+
+model EstimateTemplate {
+  id             String   @id @default(cuid())
+  organizationId String?
+  code           String   @unique
+  nameRu         String
+  description    String?
+  payload        Json
+  isDemo         Boolean  @default(false)
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@map("estimate_templates")
+}
+
+model PublicEstimateLink {
+  id        String    @id @default(cuid())
+  versionId String
+  token     String    @unique
+  expiresAt DateTime? @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdById String
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  version   EstimateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  createdBy User            @relation("CreatedBy", fields: [createdById], references: [id])
+
+  @@index([versionId])
+  @@map("public_estimate_links")
+}
+
+// ─── Requests ────────────────────────────────────────────────────────────────
+
+model ProcurementRequest {
+  id                   String        @id @default(cuid())
+  buyerOrganizationId  String
+  supplierOrganizationId String
+  estimateVersionId    String
+  status               RequestStatus @default(draft)
+  idempotencyKey       String        @unique
+  objectInfoVisible    Json?
+  /** Separate from request status: pending | delivered | skipped | failed */
+  notificationStatus   String        @default("pending")
+  notificationError    String?
+  notifiedAt           DateTime?     @db.Timestamptz(3)
+  createdAt            DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime      @updatedAt @db.Timestamptz(3)
+
+  buyerOrganization    Organization     @relation("BuyerOrg", fields: [buyerOrganizationId], references: [id])
+  supplierOrganization Organization     @relation("SupplierOrg", fields: [supplierOrganizationId], references: [id])
+  estimateVersion      EstimateVersion  @relation(fields: [estimateVersionId], references: [id])
+  lines                RequestLine[]
+  responses            SupplierResponse[]
+
+  @@index([buyerOrganizationId])
+  @@index([supplierOrganizationId])
+  @@map("procurement_requests")
+}
+
+model RequestLine {
+  id                   String  @id @default(cuid())
+  requestId            String
+  sourceEstimateLineId String?
+  nameSnapshot         String
+  unitSnapshot         String
+  qty                  Decimal @db.Decimal(18, 6)
+
+  request            ProcurementRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  sourceEstimateLine EstimateLine?      @relation(fields: [sourceEstimateLineId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+  @@map("request_lines")
+}
+
+model SupplierResponse {
+  id                     String   @id @default(cuid())
+  requestId              String
+  version                Int
+  proposedPrice          Decimal? @db.Decimal(18, 4)
+  proposedLeadTimeDays   Int?
+  proposedAvailability   AvailabilityStatus?
+  alternativeCatalogItemId String?
+  message                String?
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+
+  request                ProcurementRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  alternativeCatalogItem CatalogItem?       @relation("AltItem", fields: [alternativeCatalogItemId], references: [id], onDelete: SetNull)
+
+  @@unique([requestId, version])
+  @@map("supplier_responses")
+}
+
+// ─── Export & Audit ──────────────────────────────────────────────────────────
+
+model ExportArtifact {
+  id        String        @id @default(cuid())
+  versionId String?
+  format    ExportFormat
+  variant   ExportVariant
+  storageKey String?
+  status    ExportStatus  @default(queued)
+  error     String?
+  checksum  String?
+  createdById String
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+
+  version   EstimateVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  createdBy User             @relation(fields: [createdById], references: [id])
+
+  @@index([versionId])
+  @@map("export_artifacts")
+}
+
+model AuditEvent {
+  id             String   @id @default(cuid())
+  actorUserId    String?
+  organizationId String?
+  entityType     String
+  entityId       String
+  action         String
+  before         Json?
+  after          Json?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  actor        User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_events")
+}
+
+enum ImportJobStatus {
+  uploaded
+  previewed
+  committed
+  cancelled
+  failed
+}
+
+enum ImportFileFormat {
+  csv
+  xlsx
+}
+
+/** Uploaded document alone does NOT mean the company/licence is verified. */
+model OrganizationVerification {
+  id             String   @id @default(cuid())
+  organizationId String
+  kind           String
+  source         String
+  verifiedAt     DateTime @db.Timestamptz(3)
+  isVerified     Boolean  @default(false)
+  documentName   String?
+  notes          String?
+  createdById    String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@map("organization_verifications")
+}
+
+model ImportJob {
+  id             String          @id @default(cuid())
+  organizationId String
+  createdById    String
+  status         ImportJobStatus @default(uploaded)
+  format         ImportFileFormat
+  fileName       String
+  fileSha256     String
+  byteSize       Int
+  columnMapping  Json?
+  headers        Json?
+  previewRows    Json?
+  report         Json?
+  error          String?
+  committedAt    DateTime?       @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([createdById])
+  @@map("import_jobs")
+}

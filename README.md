@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# QuatHub
 
-## Getting Started
+Портал товаров, услуг и коммерческих смет в энергетике Казахстана.
 
-First, run the development server:
+MVP: коммерческий расчёт + заявки без онлайн-оплаты. Нормативная ПСД не заявляется.
+
+## Стек
+
+- Next.js (App Router) + TypeScript
+- PostgreSQL + Prisma
+- Auth.js (credentials)
+- Tailwind CSS
+- Vitest
+
+## Требования
+
+- Node.js 20+ (проверено на 26)
+- pnpm 9+
+- PostgreSQL (локально)
+
+## Быстрый старт
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+cp .env.example .env
+# при необходимости поправьте DATABASE_URL
+
+createdb quathub        # если ещё нет
+pnpm install
+pnpm approve-builds @prisma/client @prisma/engines prisma esbuild -y   # один раз на чистой машине
+pnpm db:migrate         # prisma migrate dev — имя: init
+pnpm db:seed
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Откройте http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Демо-учётки (только dev/test)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Email | Пароль | Роль |
+|---|---|---|
+| buyer@demo.quathub.local | Demo1234! | сметчик покупателя |
+| supplier1@demo.quathub.local | Demo1234! | поставщик |
+| supplier2@demo.quathub.local | Demo1234! | поставщик |
+| contractor@demo.quathub.local | Demo1234! | подрядчик |
+| admin@demo.quathub.local | Demo1234! | platform admin |
 
-## Learn More
+Все цены в seed учебные (`isDemo=true`).
 
-To learn more about Next.js, take a look at the following resources:
+## Скрипты
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Команда | Назначение |
+|---|---|
+| `pnpm dev` | dev-сервер |
+| `pnpm db:migrate` | миграции |
+| `pnpm db:seed` | демо-данные |
+| `pnpm test` | интеграционные/юнит тесты |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm lint` | ESLint |
+| `pnpm build` | production build |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Документация
 
-## Deploy on Vercel
+- `docs/PROJECT_BRIEF.md` — исходное задание и промпты
+- `docs/PRD.md` — продукт и границы MVP
+- `docs/ARCHITECTURE.md` — архитектура
+- `docs/DATA_MODEL.md` — модель данных
+- `docs/IMPLEMENTATION_STATUS.md` — статус этапов
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Безопасность
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Не коммитьте `.env`
+- Не публикуйте демо-пароли в production
+- Не отправляйте реальные заявки из тестового окружения
