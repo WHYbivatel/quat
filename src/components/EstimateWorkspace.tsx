@@ -193,6 +193,38 @@ export function EstimateWorkspace(props: Props) {
             ))}
           </ul>
         ) : null}
+        {props.lines.length === 0 ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-dashed border-[var(--border)] bg-[var(--bg)] p-4 text-sm">
+            <span className="text-[var(--muted)]">Смета пуста.</span>
+            <Link
+              href={`/catalog/products?projectId=${props.projectId}`}
+              className="rounded-md bg-[var(--accent)] px-3 py-1.5 font-semibold text-white"
+            >
+              Выбрать товары
+            </Link>
+            <Link
+              href={`/catalog/services?projectId=${props.projectId}`}
+              className="rounded-md border px-3 py-1.5"
+            >
+              Выбрать услуги
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-3 text-sm">
+            <Link
+              href={`/catalog/products?projectId=${props.projectId}`}
+              className="text-[var(--accent)] underline"
+            >
+              + Добавить товары
+            </Link>
+            <Link
+              href={`/catalog/services?projectId=${props.projectId}`}
+              className="text-[var(--accent)] underline"
+            >
+              + Добавить услуги
+            </Link>
+          </div>
+        )}
       </div>
 
       <div

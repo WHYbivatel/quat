@@ -93,7 +93,9 @@ export async function requireAuthContext(
   }
 
   if (action && !can(membership.role, action)) {
-    throw new AccessDeniedError(`Missing permission: ${action}`);
+    throw new AccessDeniedError(
+      `Недостаточно прав (${action}) для роли ${membership.role} в организации «${membership.organization.name}»`,
+    );
   }
 
   return {

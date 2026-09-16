@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -142,32 +143,51 @@ export function AddToEstimateButton(props: AddButtonProps) {
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-2)]"
-          onClick={() => {
-            guest.add({
-              catalogItemId: props.catalogItemId,
-              offerId: props.offerId,
-              name: props.name,
-              unit: props.unit,
-              qty: "1",
-              priceLabel: props.priceLabel,
-              kind: props.kind,
-            });
-            setMessage(
-              props.isAuthenticated
-                ? "Нет проекта — создайте в «Мои проекты». Строка сохранена локально."
-                : "Добавлено в локальный черновик (без персональных данных). Войдите, чтобы перенести в организацию.",
-            );
-          }}
-        >
-          {label}
-        </button>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-2)]"
+            onClick={() => {
+              guest.add({
+                catalogItemId: props.catalogItemId,
+                offerId: props.offerId,
+                name: props.name,
+                unit: props.unit,
+                qty: "1",
+                priceLabel: props.priceLabel,
+                kind: props.kind,
+              });
+              setMessage(
+                props.isAuthenticated
+                  ? "Позиция сохранена локально. Создайте проект — затем перенесите черновик."
+                  : "Добавлено в локальный черновик. Войдите, чтобы перенести в организацию.",
+              );
+            }}
+          >
+            {label}
+          </button>
+          {props.isAuthenticated ? (
+            <Link href="/app/projects" className="text-sm text-[var(--accent)] underline">
+              Создать проект и открыть смету
+            </Link>
+          ) : (
+            <Link
+              href={`/login?next=${encodeURIComponent("/app/projects")}`}
+              className="text-sm text-[var(--accent)] underline"
+            >
+              Войти, чтобы сохранить в организацию
+            </Link>
+          )}
+        </div>
       )}
       {message ? (
         <p className="text-sm text-[var(--muted)]" role="status">
-          {message}
+          {message}{" "}
+          {message.includes("Добавлено") || message.includes("сохранена") ? (
+            <Link href={props.isAuthenticated ? "/app/projects" : "/draft"} className="underline">
+              Открыть
+            </Link>
+          ) : null}
         </p>
       ) : null}
     </div>

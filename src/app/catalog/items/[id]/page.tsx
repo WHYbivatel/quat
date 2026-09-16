@@ -28,9 +28,17 @@ export default async function ItemPage({
   if (!item) notFound();
 
   const session = await auth();
-  const projects = session?.user?.id
-    ? await listProjectsForUser(session.user.id)
-    : [];
+  let projects: { id: string; name: string }[] = [];
+  if (session?.user?.id) {
+    try {
+      projects = (await listProjectsForUser(session.user.id)).map((p) => ({
+        id: p.id,
+        name: p.name,
+      }));
+    } catch {
+      projects = [];
+    }
+  }
 
   const scope = (item.serviceScope ?? null) as Scope | null;
   const comparable = item.offers
@@ -202,7 +210,7 @@ export default async function ItemPage({
                           unit={item.baseUnit.code}
                           priceLabel={price.label}
                           kind={item.kind}
-                          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+                          projects={projects}
                           isAuthenticated={Boolean(session?.user)}
                           addAction={addToEstimateAction}
                         />
@@ -223,7 +231,7 @@ export default async function ItemPage({
                 unit={item.baseUnit.code}
                 priceLabel="Цена по запросу"
                 kind={item.kind}
-                projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+                projects={projects}
                 isAuthenticated={Boolean(session?.user)}
                 addAction={addToEstimateAction}
               />

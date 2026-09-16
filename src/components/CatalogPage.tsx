@@ -67,6 +67,14 @@ export async function CatalogPage({
           Учебные демо-цены. Не рыночные и не нормативные. Совместимость оборудования
           не оценивается.
         </p>
+        {typeof sp.projectId === "string" && sp.projectId ? (
+          <p className="mt-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
+            Добавление в проект сметы.{" "}
+            <Link href="/app/projects" className="text-[var(--accent)] underline">
+              К моим проектам
+            </Link>
+          </p>
+        ) : null}
 
         <div className="mt-6">
           <Suspense fallback={<p className="text-sm text-[var(--muted)]">Загрузка фильтров…</p>}>

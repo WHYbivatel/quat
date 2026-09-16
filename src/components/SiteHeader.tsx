@@ -1,18 +1,40 @@
 import Link from "next/link";
 import { auth, signOut } from "@/lib/auth";
+import { getOrCreateActiveOrganizationId, listMemberships } from "@/modules/organizations/access";
 
-const links = [
+const publicLinks = [
   { href: "/catalog/products", label: "Товары" },
   { href: "/catalog/services", label: "Услуги" },
+];
+
+const authLinks = [
   { href: "/app/projects", label: "Мои проекты" },
   { href: "/app/requests", label: "Заявки" },
   { href: "/app/supplier/offers", label: "Поставщик" },
   { href: "/app/supplier/requests", label: "Входящие" },
-  { href: "/app/admin", label: "Админ" },
 ];
 
 export async function SiteHeader() {
   const session = await auth();
+  let orgName: string | null = null;
+  let isAdmin = false;
+  if (session?.user?.id) {
+    try {
+      const memberships = await listMemberships(session.user.id);
+      const activeId = await getOrCreateActiveOrganizationId(session.user.id);
+      const active = memberships.find((m) => m.organizationId === activeId);
+      orgName = active?.organization.name ?? null;
+      isAdmin = memberships.some((m) => m.role === "platform_admin");
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const links = [
+    ...publicLinks,
+    ...(session?.user ? authLinks : []),
+    ...(isAdmin ? [{ href: "/app/admin", label: "Админ" }] : []),
+  ];
 
   return (
     <header className="border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur">
@@ -36,6 +58,11 @@ export async function SiteHeader() {
         <div className="flex items-center gap-3 text-sm">
           {session?.user ? (
             <>
+              {orgName ? (
+                <span className="hidden text-[var(--muted)] md:inline" title="Активная организация">
+                  {orgName}
+                </span>
+              ) : null}
               <Link
                 href="/app"
                 className="text-[var(--muted)] hover:text-[var(--fg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
@@ -58,7 +85,7 @@ export async function SiteHeader() {
             </>
           ) : (
             <Link
-              href="/login"
+              href="/login?next=/app"
               className="rounded-md bg-[var(--accent)] px-3 py-1.5 font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-2)]"
             >
               Войти
@@ -75,6 +102,18 @@ export async function SiteHeader() {
             {l.label}
           </Link>
         ))}
+        {session?.user ? (
+          <form
+            action={async () => {
+              "use server";
+              await signOut({ redirectTo: "/" });
+            }}
+          >
+            <button type="submit" className="whitespace-nowrap text-[var(--muted)] underline">
+              Выйти
+            </button>
+          </form>
+        ) : null}
       </nav>
     </header>
   );
