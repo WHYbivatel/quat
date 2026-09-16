@@ -39,18 +39,22 @@ export async function getOrCreateActiveOrganizationId(
     if (stillMember) return session.activeOrganizationId;
   }
 
-  const first = await prisma.membership.findFirst({
+  const memberships = await prisma.membership.findMany({
     where: { userId },
     orderBy: { createdAt: "asc" },
   });
-  if (!first) return null;
+  if (memberships.length === 0) return null;
+
+  // Prefer an org where the user can create projects/estimates
+  const preferred =
+    memberships.find((m) => can(m.role, "project:write")) ?? memberships[0];
 
   await prisma.userSession.upsert({
     where: { userId },
-    create: { userId, activeOrganizationId: first.organizationId },
-    update: { activeOrganizationId: first.organizationId },
+    create: { userId, activeOrganizationId: preferred.organizationId },
+    update: { activeOrganizationId: preferred.organizationId },
   });
-  return first.organizationId;
+  return preferred.organizationId;
 }
 
 export async function setActiveOrganization(
