@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
+import { FeatureStatusBadge } from "@/components/features/FeatureStatusBadge";
+import { UnavailableAction } from "@/components/features/UnavailableAction";
 import { auth } from "@/lib/auth";
 import { requirePlatformAdmin } from "@/modules/organizations/access";
 import { prisma } from "@/lib/db";
 import { republishSourcesAction } from "@/app/actions/admin";
+import { getFeature } from "@/modules/features/registry";
 
 export default async function AdminSourcesPage() {
   const session = await auth();
@@ -30,10 +33,13 @@ export default async function AdminSourcesPage() {
         <Link href="/app/admin" className="text-sm text-[var(--muted)]">
           ← Админ
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold">Источники публичных прайсов</h1>
+        <h1 className="mt-2 flex flex-wrap items-center gap-2 text-2xl font-semibold">
+          Источники публичных прайсов
+          <FeatureStatusBadge status={getFeature("catalog.public_prices").status} />
+        </h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Внешние SourceProvider ≠ Organization. Автосбор только при явном
-          разрешении; сейчас — curated manual publish.
+          {getFeature("catalog.public_prices").limitation} Внешние SourceProvider ≠
+          Organization.
         </p>
         <form action={republishSourcesAction} className="mt-4">
           <button
@@ -43,6 +49,9 @@ export default async function AdminSourcesPage() {
             Опубликовать curated-набор заново
           </button>
         </form>
+        <div className="mt-3">
+          <UnavailableAction feature={getFeature("catalog.auto_sync")} />
+        </div>
         <ul className="mt-6 space-y-4 text-sm">
           {providers.map((p) => (
             <li key={p.id} className="rounded border p-4">

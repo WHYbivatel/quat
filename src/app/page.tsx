@@ -21,8 +21,15 @@ export default async function HomePage() {
               Коммерческие сметы для электроснабжения
             </h1>
             <p className="mt-3 text-[var(--muted)]">
-              Регион → товары и услуги → проект → смета → документы и заявки.
-              Нормативная ПСД в MVP не заявляется.
+              Регион → товары и услуги → проект → смета → документы и заявки.{" "}
+              <Link href="/coming-soon?feature=normative.kz" className="underline">
+                Нормативная ПСД
+              </Link>{" "}
+              в MVP не заявляется.{" "}
+              <Link href="/capabilities" className="text-[var(--accent)] underline">
+                Возможности стенда
+              </Link>
+              .
             </p>
           </div>
           <div className="flex flex-wrap gap-3">

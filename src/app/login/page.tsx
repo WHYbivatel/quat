@@ -147,6 +147,12 @@ export default async function LoginPage({
           В каталог без входа
         </Link>
       </p>
+      <p className="mt-4 text-center text-xs text-[var(--muted)]">
+        Восстановление пароля — в разработке. Сброс выполняет администратор стенда.{" "}
+        <Link href="/coming-soon?feature=auth.password_reset" className="underline">
+          Подробнее
+        </Link>
+      </p>
     </main>
   );
 }

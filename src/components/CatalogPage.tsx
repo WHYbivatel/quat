@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { CatalogFilters } from "@/components/CatalogFilters";
+import { FeatureStatusBadge } from "@/components/features/FeatureStatusBadge";
 import {
   serializeOfferPrice,
 } from "@/modules/catalog/queries";
@@ -12,6 +13,7 @@ import {
 } from "@/modules/catalog/cached";
 import { prisma } from "@/lib/db";
 import type { CatalogItemKind } from "@prisma/client";
+import { getFeature } from "@/modules/features/registry";
 
 function parseParams(
   kind: CatalogItemKind,
@@ -64,10 +66,24 @@ export async function CatalogPage({
     <>
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
-        <h1 className="font-[family-name:var(--font-display)] text-3xl">{title}</h1>
+        <h1 className="flex flex-wrap items-center gap-2 font-[family-name:var(--font-display)] text-3xl">
+          {title}
+          {kind === "service" ? (
+            <FeatureStatusBadge status={getFeature("catalog.public_prices").status} />
+          ) : null}
+        </h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Учебные демо-цены. Не рыночные и не нормативные. Совместимость оборудования
-          не оценивается.
+          {kind === "service" ? (
+            <>
+              {getFeature("catalog.public_prices").limitation} Демо-позиции — учебные
+              данные.
+            </>
+          ) : (
+            <>
+              Учебные демо-цены. Не рыночные и не нормативные. Совместимость
+              оборудования не оценивается.
+            </>
+          )}
         </p>
         {typeof sp.projectId === "string" && sp.projectId ? (
           <p className="mt-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">

@@ -43,6 +43,13 @@ export async function SiteHeader() {
           <Link href="/" className="font-semibold tracking-tight text-[var(--accent)]">
             QuatHub
           </Link>
+          <Link
+            href="/capabilities"
+            className="hidden rounded border border-[var(--accent-2)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--accent-2)] sm:inline"
+            title="Статус функций пилотного стенда"
+          >
+            Тестовый стенд
+          </Link>
           <nav className="hidden items-center gap-4 text-sm sm:flex" aria-label="Основная">
             {links.map((l) => (
               <Link
@@ -56,6 +63,12 @@ export async function SiteHeader() {
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm">
+          <Link
+            href="/capabilities"
+            className="hidden text-[var(--muted)] hover:text-[var(--fg)] md:inline"
+          >
+            Возможности
+          </Link>
           {session?.user ? (
             <>
               {orgName ? (

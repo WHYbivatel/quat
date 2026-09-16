@@ -656,6 +656,67 @@ export function EstimateWorkspace(props: Props) {
                 Скачать PDF ещё раз
               </a>
             ) : null}
+            <div className="flex flex-wrap gap-2">
+              {(["xlsx", "docx", "csv"] as const).map((format) => (
+                <button
+                  key={format}
+                  type="button"
+                  className="flex-1 rounded-md border border-[var(--border)] px-2 py-1.5 text-xs disabled:opacity-50"
+                  disabled={pdfBusy || pending}
+                  onClick={() => {
+                    if (pdfBusy) return;
+                    setPdfBusy(true);
+                    setSaveState("saving");
+                    setMessage(null);
+                    startTransition(async () => {
+                      try {
+                        const res = await fetch("/api/exports/draft", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            estimateId: props.estimateId,
+                            expectedRevision: revision,
+                            format,
+                            variant: view === "internal" ? "internal" : "client",
+                          }),
+                        });
+                        if (!res.ok) {
+                          setSaveState("error");
+                          const ctype = res.headers.get("content-type") || "";
+                          if (ctype.includes("application/json")) {
+                            setMessage(
+                              (await res.json().catch(() => ({}))).error ?? "Ошибка экспорта",
+                            );
+                          } else {
+                            setMessage(`Ошибка экспорта (${res.status}).`);
+                          }
+                          return;
+                        }
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `estimate-draft-r${revision}.${format}`;
+                        a.rel = "noopener";
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(url);
+                        setSaveState("saved");
+                        setMessage(`${format.toUpperCase()} готов.`);
+                      } catch {
+                        setSaveState("error");
+                        setMessage(`Не удалось подготовить ${format.toUpperCase()}.`);
+                      } finally {
+                        setPdfBusy(false);
+                      }
+                    });
+                  }}
+                >
+                  {format.toUpperCase()}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               className="w-full rounded-md border border-[var(--border)] px-3 py-2"

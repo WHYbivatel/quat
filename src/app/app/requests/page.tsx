@@ -1,9 +1,26 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/SiteHeader";
+import { FeatureStatusBadge } from "@/components/features/FeatureStatusBadge";
 import { auth } from "@/lib/auth";
 import { listBuyerRequests } from "@/modules/requests/service";
 import { acceptResponseAction } from "@/app/actions/requests";
+import { getFeature } from "@/modules/features/registry";
+
+function notificationLabel(status: string): string {
+  switch (status) {
+    case "delivered":
+      return "доставлено в кабинет";
+    case "logged":
+      return "записано в журнал стенда (email не отправлен)";
+    case "skipped":
+      return "без кабинета — доставка не выполнялась";
+    case "failed":
+      return "ошибка уведомления";
+    default:
+      return status;
+  }
+}
 
 export default async function BuyerRequestsPage() {
   const session = await auth();
@@ -14,11 +31,13 @@ export default async function BuyerRequestsPage() {
     <>
       <SiteHeader />
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <h1 className="font-[family-name:var(--font-display)] text-3xl">
+        <h1 className="flex flex-wrap items-center gap-2 font-[family-name:var(--font-display)] text-3xl">
           Исходящие заявки
+          <FeatureStatusBadge status={getFeature("requests.notify_email").status} />
         </h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Принятие ответа обновляет черновик сметы, не выпущенную версию. Не ЭЦП и не оплата.
+          Принятие ответа обновляет черновик сметы, не выпущенную версию. Не ЭЦП и
+          не оплата. {getFeature("requests.notify_email").limitation}
         </p>
         <ul className="mt-6 space-y-3">
           {requests.length === 0 ? (
@@ -36,7 +55,7 @@ export default async function BuyerRequestsPage() {
                       <div className="font-semibold">{r.supplierOrganization.name}</div>
                       <div className="text-[var(--muted)]">
                         статус: {r.status} · строк: {r.lines.length} · уведомление:{" "}
-                        {r.notificationStatus}
+                        {notificationLabel(r.notificationStatus)}
                       </div>
                       <div className="text-xs text-[var(--muted)]">
                         версия сметы v{r.estimateVersion.versionNumber}

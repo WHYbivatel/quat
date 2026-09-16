@@ -68,4 +68,30 @@ test.describe("critical path MVP", () => {
     });
     await expect(continueBtn.first()).toBeVisible();
   });
+
+  test("capabilities page and coming-soon are honest", async ({ page, request }) => {
+    await page.goto("/capabilities");
+    await expect(page.getByRole("heading", { name: /возможности стенда/i })).toBeVisible();
+    await expect(page.getByText(/в разработке/i).first()).toBeVisible();
+    await expect(page.locator('a[href="#"]')).toHaveCount(0);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.getByRole("link", { name: /тестовый стенд|возможности/i }).first()).toBeVisible();
+
+    await page.goto("/coming-soon?feature=normative.kz");
+    await expect(page.getByRole("heading", { name: /норматив/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /все возможности/i })).toBeVisible();
+
+    const cap = await request.get("/api/capabilities");
+    expect(cap.ok()).toBeTruthy();
+    const body = await cap.json();
+    expect(Array.isArray(body.features)).toBeTruthy();
+
+    const probe = await request.post("/api/features/probe", {
+      data: { featureId: "catalog.auto_sync" },
+    });
+    expect(probe.status()).toBe(403);
+    const probeJson = await probe.json();
+    expect(probeJson.featureId).toBe("catalog.auto_sync");
+  });
 });
