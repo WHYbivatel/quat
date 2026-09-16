@@ -1,39 +1,32 @@
 # QuatHub — Implementation Status
 
 **Обновлено:** 2026-09-16  
-**Текущий этап:** Промпт 7B завершён → далее 8
+**Текущий этап:** Промпт 8 завершён → далее 9 (после закрытого пилота)
 
 ## 1. Состояние репозитория
 
-Стенд: https://quat.esl.kz · GitHub: WHYbivatel/quat · app `0.2.0`
+Стенд: https://quat.esl.kz · GitHub: WHYbivatel/quat · app `0.2.0`  
+**Не production-ready** для открытого доступа (см. `docs/PILOT_REPORT.md`).
 
 ## 2. Результаты этапов
 
-### Промпт 0–7 ✅
+### Промпт 0–7 / 7R / 7A / 7B ✅
 
-### Промпт 7R ✅
-
-### Промпт 7A — Публичные услуги/цены ✅
-
-### Промпт 7B — Версии, кэш, деплой ✅
+### Промпт 8 — Аудит MVP и подготовка к пилоту ✅
 
 **Сделано:**
-- `docs/CACHING_AND_RELEASES.md` — аудит Next 16.3.5
-- `build-info.json` / `scripts/write-build-info.mjs` — APP_VERSION, GIT_SHA, BUILD_TIME, DEPLOYMENT_ID
-- `/api/version`, `/api/health/live`, `/api/health/ready`
-- Footer + admin version; `DeploymentWatcher`
-- `cacheTags` + `invalidateCache` + `CacheInvalidationJob` outbox
-- Каталог через `unstable_cache` (tags, 60s); мутации адресно инвалидируют
-- Cache-Control headers в `next.config.ts`; пример Nginx
-- CI шаблон `deploy/ci.github-actions.yml`; шаблон `scripts/deploy-release.sh`
-- README: Релиз / версия / кэш / rollback; `CHANGELOG.md`
-- Advisory lock на curated publish; SW не добавлялся
+- Rate limits: login, public links, sources republish (+ уже были export/import)
+- Честный `notificationStatus=skipped` для поставщика без пользователей кабинета
+- Playwright e2e критического UI-пути (`e2e/critical-path.spec.ts`)
+- Docs: `PILOT_CHECKLIST`, `PILOT_REPORT`, `BACKUP_RESTORE`; скрипты backup/restore-verify
+- CI-шаблон обновлён (migrate, seed, e2e) — файл `deploy/ci.github-actions.yml`
 
-**Ограничения стенда:** полный release-dir pipeline — шаблон; текущий деплой ещё SSH. CDN purge — не используется.
+**Проверено:** Vitest (вкл. skipped notify, rate-limit); typecheck/lint/build; e2e локально/на стенде по результатам прогона.
 
 ## 3. Следующий этап
 
-**8** — сквозная проверка MVP / пилот. Затем 9. Промпт 10 отдельно.
+**9** — production-инфраструктура после успешного закрытого пилота.  
+**10** — нормативные сметы (отдельное исследование).
 
 ## 4. Журнал
 
@@ -42,4 +35,5 @@
 | 2026-09-16 | 0–7 | OK |
 | 2026-09-16 | 7R | OK |
 | 2026-09-16 | 7A | OK |
-| 2026-09-16 | 7B | OK — versioning + targeted cache invalidation |
+| 2026-09-16 | 7B | OK |
+| 2026-09-16 | 8 | OK — pilot prep; not open production |

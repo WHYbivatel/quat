@@ -2,11 +2,9 @@
 
 ## 0.2.0 — 2026-09-16
 
-- Версионирование сборки: `APP_VERSION`, `GIT_SHA`, `BUILD_TIME`, `DEPLOYMENT_ID` (`build-info.json`)
-- `/api/version`, `/api/health/live`, `/api/health/ready`
-- Адресная инвалидация кэша каталога + outbox `CacheInvalidationJob`
-- Баннер обновления при смене `deploymentId`
-- CI workflow и шаблон release-dir deploy
+- Версионирование сборки + health/version (7B)
+- Адресная инвалидация кэша + outbox
+- Prompt 8: rate limits (login/links/sources), skipped notify без кабинета, Playwright e2e, pilot/backup docs
 
 ## 0.1.0
 

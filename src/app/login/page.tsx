@@ -3,6 +3,17 @@ import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { auth, signIn, signOut } from "@/lib/auth";
 import { safeReturnTo } from "@/lib/safe-url";
+import { assertRateLimit, RateLimitError } from "@/lib/rate-limit";
+import { headers } from "next/headers";
+
+async function clientKey() {
+  const h = await headers();
+  return (
+    h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    h.get("x-real-ip") ||
+    "unknown"
+  );
+}
 
 async function loginAction(formData: FormData) {
   "use server";
@@ -10,12 +21,21 @@ async function loginAction(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const next = safeReturnTo(String(formData.get("next") ?? ""), "/app");
   try {
+    const ip = await clientKey();
+    assertRateLimit({
+      key: `login:${ip}:${email.toLowerCase()}`,
+      limit: 10,
+      message: "Слишком много попыток входа. Подождите минуту.",
+    });
     await signIn("credentials", {
       email,
       password,
       redirectTo: next,
     });
   } catch (error) {
+    if (error instanceof RateLimitError) {
+      redirect(`/login?error=rate&next=${encodeURIComponent(next)}`);
+    }
     if (error instanceof AuthError) {
       redirect(`/login?error=credentials&next=${encodeURIComponent(next)}`);
     }
@@ -35,6 +55,7 @@ export default async function LoginPage({
 }) {
   const params = await searchParams;
   const hasError = params.error === "credentials";
+  const rateLimited = params.error === "rate";
   const next = safeReturnTo(params.next, "/app");
   const session = await auth();
 
@@ -107,6 +128,11 @@ export default async function LoginPage({
         {hasError ? (
           <p className="text-sm text-[var(--danger)]" role="alert">
             Неверный email или пароль.
+          </p>
+        ) : null}
+        {rateLimited ? (
+          <p className="text-sm text-[var(--danger)]" role="alert">
+            Слишком много попыток входа. Подождите минуту.
           </p>
         ) : null}
         <button

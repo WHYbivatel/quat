@@ -92,8 +92,18 @@ pnpm dev
 - `docs/ARCHITECTURE.md` — архитектура
 - `docs/DATA_MODEL.md` — модель данных
 - `docs/CACHING_AND_RELEASES.md` — кэш и релизы
+- `docs/BACKUP_RESTORE.md` — backup / restore drill
+- `docs/PILOT_CHECKLIST.md` — чеклист пилота
+- `docs/PILOT_REPORT.md` — отчёт готовности (промпт 8)
 - `docs/IMPLEMENTATION_STATUS.md` — статус этапов
 - `CHANGELOG.md` — release notes
+
+## Тесты
+
+```bash
+pnpm test          # Vitest
+pnpm build && pnpm test:e2e   # Playwright critical path (нужен seed)
+```
 
 ## Безопасность
 

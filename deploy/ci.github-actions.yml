@@ -8,6 +8,25 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci?schema=public
+      DATABASE_URL_TEST: postgresql://ci:ci@127.0.0.1:5432/ci?schema=public
+      AUTH_SECRET: ci-secret-not-for-production-use-32b
+      AUTH_URL: http://127.0.0.1:3000
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -18,6 +37,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma migrate deploy
+      - run: pnpm db:seed
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
@@ -26,21 +47,19 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           DEPLOYMENT_ID: ci-${{ github.sha }}
           BUILD_TIME: ${{ github.event.head_commit.timestamp }}
-          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
-          AUTH_SECRET: ci-secret-not-for-production-use-32b
         run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: E2E critical path
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          AUTH_URL: http://localhost:3000
+        run: |
+          pnpm exec next start -H localhost -p 3000 &
+          for i in $(seq 1 30); do curl -fsS http://localhost:3000/api/health/live && break; sleep 2; done
+          pnpm test:e2e
 
   # Template: enable when staging SSH secrets are configured.
   # deploy:
   #   needs: verify
   #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Deploy release dir
-  #       env:
-  #         SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
-  #         HOST: ${{ secrets.STAGING_HOST }}
-  #       run: |
-  #         # ssh ... 'APP_ROOT=/var/www/quat.esl.kz ./scripts/deploy-release.sh'
-  #         echo "Configure secrets then uncomment"
+  #   ...

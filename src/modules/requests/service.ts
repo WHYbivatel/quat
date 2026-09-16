@@ -184,6 +184,23 @@ export async function submitProcurementRequests(opts: {
     if (req.notificationStatus === "delivered" || req.notificationStatus === "skipped") {
       continue;
     }
+
+    const cabinetUsers = await prisma.membership.count({
+      where: { organizationId: req.supplierOrganizationId },
+    });
+    if (cabinetUsers === 0) {
+      await prisma.procurementRequest.update({
+        where: { id: req.id },
+        data: {
+          notificationStatus: "skipped",
+          notificationError:
+            "У организации нет пользователей кабинета — заявка сохранена, доставка inbox не имитируется",
+          notifiedAt: null,
+        },
+      });
+      continue;
+    }
+
     try {
       const result = await notifier.send({
         type: "procurement_request_submitted",

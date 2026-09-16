@@ -330,6 +330,12 @@ export async function createPublicLink(opts: {
   expiresInDays?: number;
 }) {
   await requireAuthContext(opts.userId, "estimate:issue");
+  const { assertRateLimit } = await import("@/lib/rate-limit");
+  assertRateLimit({
+    key: `public-link:${opts.userId}`,
+    limit: 20,
+    message: "Слишком много публичных ссылок. Подождите минуту.",
+  });
   const version = await getVersionForUser(opts.userId, opts.versionId);
   const token = randomBytes(32).toString("base64url");
   const expiresAt =

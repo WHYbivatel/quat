@@ -203,6 +203,12 @@ export async function republishSourcesAction() {
   if (!userId) throw new Error("Нужен вход");
   const { requirePlatformAdmin } = await import("@/modules/organizations/access");
   await requirePlatformAdmin(userId);
+  const { assertRateLimit } = await import("@/lib/rate-limit");
+  assertRateLimit({
+    key: `sources-republish:${userId}`,
+    limit: 3,
+    message: "Слишком частая синхронизация источников. Подождите минуту.",
+  });
   const { publishCuratedPublicSources } = await import("@/modules/sources/publish");
   await publishCuratedPublicSources({ actorUserId: userId });
   redirect("/app/admin/sources");
