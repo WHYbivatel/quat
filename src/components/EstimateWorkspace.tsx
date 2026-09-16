@@ -763,12 +763,10 @@ export function EstimateWorkspace(props: Props) {
             <button
               type="button"
               className="w-full rounded-md border border-[var(--border)] px-3 py-2 disabled:opacity-50"
-              disabled={pdfBusy || pending || pdfUnavailable}
+              disabled={pdfBusy || pdfUnavailable}
               aria-describedby={pdfStatusId}
               onClick={() => {
-                startTransition(() => {
-                  void downloadDraft("pdf");
-                });
+                void downloadDraft("pdf");
               }}
             >
               {pdfUnavailable
@@ -803,9 +801,7 @@ export function EstimateWorkspace(props: Props) {
                       type="button"
                       className="mt-1 text-xs text-[var(--accent)] underline"
                       onClick={() => {
-                        startTransition(() => {
-                          void downloadDraft("pdf");
-                        });
+                        void downloadDraft("pdf");
                       }}
                     >
                       Повторить
@@ -829,11 +825,9 @@ export function EstimateWorkspace(props: Props) {
                   key={format}
                   type="button"
                   className="flex-1 rounded-md border border-[var(--border)] px-2 py-1.5 text-xs disabled:opacity-50"
-                  disabled={pdfBusy || pending}
+                  disabled={pdfBusy}
                   onClick={() => {
-                    startTransition(() => {
-                      void downloadDraft(format);
-                    });
+                    void downloadDraft(format);
                   }}
                 >
                   {format.toUpperCase()}
