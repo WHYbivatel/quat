@@ -1,7 +1,7 @@
 # QuatHub — Implementation Status
 
 **Обновлено:** 2026-09-16  
-**Текущий этап:** Feature Availability Audit после hotfix → далее 9
+**Текущий этап:** Fix PDF Content-Disposition + version link → далее 9
 
 ## 1. Состояние репозитория
 
@@ -10,16 +10,19 @@
 
 ## 2. Результаты этапов
 
-### Промпт 0–8 ✅ · Hotfix draft/issue/PDF ✅
-
 ### Feature Availability Audit ✅
 
-- Реестр: `src/modules/features/registry.ts`
-- Документ: `docs/FEATURE_AVAILABILITY.md`
-- UI: бейджи LIMITED/COMING_SOON, `/capabilities`, `/coming-soon`, админ-матрица
-- Честные тексты: уведомления (журнал), публичные прайсы, автосинк, сброс пароля
-- Draft-экспорт XLSX/DOCX/CSV в редакторе
-- Probe API блокирует COMING_SOON (403)
+### Fix: PDF Export failed + ссылка на версию ✅
+
+**Причина `Export failed` на публичном стенде:** PDF генерировался успешно (файлы в `.data/exports` с именами `СМ-001_…`), но ответ падал на установке заголовка `Content-Disposition` с кириллицей — `TypeError: Cannot convert argument to a ByteString`. Клиент показывал сырое `Export failed`.
+
+**Почему прежняя проверка не поймала:** смотрели сигнатуру `%PDF`/файл на диске, а не полный HTTP-ответ с кириллическим `filename` в Headers.
+
+**Исправлено:**
+- RFC 5987 `filename`/`filename*` без non-ASCII в ByteString
+- Отдельный feedback у кнопок PDF и выпуска; русские тексты + requestId
+- Ссылка «Открыть версию №N» как настоящий `<Link>`
+- `/api/health/ready` → `checks.pdf`
 
 ## 3. Следующий этап
 
@@ -29,6 +32,5 @@
 
 | Дата | Этап | Результат |
 |---|---|---|
-| 2026-09-16 | 0–8 | OK |
-| 2026-09-16 | hotfix draft/issue/PDF | OK |
-| 2026-09-16 | Feature Availability Audit | OK — честные статусы в UI |
+| 2026-09-16 | Feature Availability Audit | OK |
+| 2026-09-16 | Fix PDF ByteString + version link | OK |
