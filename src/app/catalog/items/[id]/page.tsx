@@ -8,6 +8,7 @@ import {
   comparableUnitExVat,
   getCatalogItemById,
   serializeOfferPrice,
+  serializePublicListing,
 } from "@/modules/catalog/queries";
 import { listProjectsForUser } from "@/modules/projects/service";
 
@@ -133,6 +134,62 @@ export default async function ItemPage({
               Подбор по характеристикам не является инженерным проектированием и не
               подтверждает безопасную совместимость.
             </p>
+          </section>
+
+          <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">
+            <h2 className="font-semibold">Публичные прайсы (внешние)</h2>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Не кабинет поставщика QuatHub. Заявка на портале не считается
+              доставленной внешнему исполнителю.
+            </p>
+            {item.publicListings.length === 0 ? (
+              <p className="mt-4 text-sm text-[var(--muted)]">Нет опубликованных внешних прайсов.</p>
+            ) : (
+              <ul className="mt-4 space-y-4">
+                {item.publicListings.map((listing) => {
+                  const display = serializePublicListing(listing);
+                  return (
+                    <li key={listing.id} className="border-t border-[var(--border)] pt-4 text-sm">
+                      <div className="font-medium">{display.providerName}</div>
+                      <div className="mt-1 text-lg font-semibold">{display.label}</div>
+                      <div className="text-[var(--muted)]">
+                        {display.unit} · {display.city ?? "регион не указан"} · {display.tax}
+                        {display.stale ? " · устарело" : ""}
+                        {display.requiresInspection ? " · может потребоваться осмотр" : ""}
+                      </div>
+                      <p className="mt-2 text-xs text-amber-800">{display.trust}</p>
+                      {display.checkedAt ? (
+                        <p className="text-xs text-[var(--muted)]">
+                          Проверено {display.checkedAt}
+                        </p>
+                      ) : null}
+                      {display.sourceUrl ? (
+                        <a
+                          href={display.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-block text-[var(--accent)] underline"
+                        >
+                          Открыть источник
+                        </a>
+                      ) : null}
+                      <div className="mt-3">
+                        <AddToEstimateButton
+                          catalogItemId={item.id}
+                          name={item.name}
+                          unit={item.baseUnit.code}
+                          priceLabel={display.label}
+                          kind={item.kind}
+                          projects={projects}
+                          isAuthenticated={Boolean(session?.user)}
+                          addAction={addToEstimateAction}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </section>
 
           <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5">

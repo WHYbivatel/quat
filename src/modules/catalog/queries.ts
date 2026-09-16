@@ -175,6 +175,11 @@ export async function getCatalogItemById(id: string) {
         },
         orderBy: { updatedAt: "desc" },
       },
+      publicListings: {
+        where: { lifecycle: { in: ["published", "stale"] } },
+        include: { sourceProvider: true },
+        orderBy: { updatedAt: "desc" },
+      },
     },
   });
 }
@@ -250,6 +255,66 @@ export function serializeOfferPrice(offer: {
     reason: offer.unknownPriceReason,
     comparableHint:
       "Сравнение без доставки и при разных условиях НДС/упаковки — ориентировочное.",
+  };
+}
+
+export function serializePublicListing(listing: {
+  priceType: string;
+  price: { toString(): string } | null;
+  priceMin: { toString(): string } | null;
+  priceMax: { toString(): string } | null;
+  currency: string;
+  taxStatus: string;
+  unitLabelRaw: string | null;
+  cityName: string | null;
+  verificationStatus: string;
+  lastCheckedAt: Date | null;
+  sourceUrl: string | null;
+  lifecycle: string;
+  isMarketOrientator: boolean;
+  requiresInspection: boolean;
+  sourceProvider: { name: string };
+}) {
+  let label: string;
+  switch (listing.priceType) {
+    case "on_request":
+      label = "Цена по запросу";
+      break;
+    case "from":
+      label = `от ${listing.priceMin?.toString() ?? "—"} ${listing.currency}`;
+      break;
+    case "range":
+      label = `${listing.priceMin?.toString() ?? "—"}–${listing.priceMax?.toString() ?? "—"} ${listing.currency}`;
+      break;
+    default:
+      label =
+        listing.price != null
+          ? `${listing.price.toString()} ${listing.currency}`
+          : "Цена не указана";
+  }
+  const tax =
+    listing.taxStatus === "with_vat"
+      ? "с НДС (как в источнике)"
+      : listing.taxStatus === "without_vat"
+        ? "без НДС (как в источнике)"
+        : "НДС в источнике не уточнён";
+  const trust =
+    listing.verificationStatus === "external_unverified" ||
+    listing.verificationStatus === "source_checked"
+      ? "Публичный прайс; QuatHub не подтверждал наличие и окончательную стоимость"
+      : listing.verificationStatus;
+  return {
+    label,
+    tax,
+    trust,
+    providerName: listing.sourceProvider.name,
+    unit: listing.unitLabelRaw,
+    city: listing.cityName,
+    checkedAt: listing.lastCheckedAt?.toISOString().slice(0, 10) ?? null,
+    sourceUrl: listing.sourceUrl,
+    stale: listing.lifecycle === "stale",
+    marketOnly: listing.isMarketOrientator,
+    requiresInspection: listing.requiresInspection,
   };
 }
 

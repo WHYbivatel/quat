@@ -13,6 +13,7 @@ const sections = [
   { href: "/app/admin/offers", label: "Предложения" },
   { href: "/app/admin/templates", label: "Шаблоны" },
   { href: "/app/admin/import", label: "Импорт прайса" },
+  { href: "/app/admin/sources", label: "Публичные источники" },
   { href: "/app/admin/audit", label: "История" },
 ];
 

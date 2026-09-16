@@ -344,6 +344,7 @@ model CatalogItem {
   offers     Offer[]
   lines      EstimateLine[]
   altResponses SupplierResponse[]   @relation("AltItem")
+  publicListings PublicPriceListing[]
 
   @@index([categoryId])
   @@index([kind, status])
@@ -775,3 +776,135 @@ model ImportJob {
   @@index([createdById])
   @@map("import_jobs")
 }
+
+// ─── External public price sources (not QuatHub organizations) ───────────────
+
+enum SourceKind {
+  provider_public_price
+  marketplace_aggregate
+  manual_partner_import
+  provider_cabinet
+}
+
+enum VerificationStatus {
+  external_unverified
+  source_checked
+  provider_claimed
+  provider_verified
+}
+
+enum ListingLifecycle {
+  staged
+  published
+  quarantined
+  stale
+  archived
+}
+
+enum TaxStatus {
+  unknown
+  with_vat
+  without_vat
+  not_specified
+}
+
+enum SourceImportRunStatus {
+  running
+  published
+  quarantined
+  failed
+  cancelled
+}
+
+/** External executor/publisher of a public price list — NOT a QuatHub Organization. */
+model SourceProvider {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  domain      String?
+  websiteUrl  String?
+  regionNote  String?
+  notes       String?
+  autoSync    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  listings PublicPriceListing[]
+  runs     SourceImportRun[]
+
+  @@map("source_providers")
+}
+
+model PublicPriceListing {
+  id                   String             @id @default(cuid())
+  sourceProviderId     String
+  catalogItemId        String
+  sourceKind           SourceKind
+  verificationStatus   VerificationStatus @default(external_unverified)
+  lifecycle            ListingLifecycle   @default(staged)
+  sourceUrl            String?
+  sourceDomain         String?
+  sourcePublishedAt    DateTime?          @db.Timestamptz(3)
+  fetchedAt            DateTime?          @db.Timestamptz(3)
+  lastCheckedAt        DateTime?          @db.Timestamptz(3)
+  validUntil           DateTime?          @db.Timestamptz(3)
+  parserVersion        String?
+  sourceRecordKey      String
+  sourceContentHash    String?
+  priceType            PriceType
+  price                Decimal?           @db.Decimal(18, 4)
+  priceMin             Decimal?           @db.Decimal(18, 4)
+  priceMax             Decimal?           @db.Decimal(18, 4)
+  currency             String             @default("KZT") @db.Char(3)
+  taxStatus            TaxStatus          @default(unknown)
+  unitCode             String
+  unitLabelRaw         String?
+  regionCode           String?
+  cityName             String?
+  includedItems        Json?
+  excludedItems        Json?
+  requiresInspection   Boolean            @default(false)
+  isMarketOrientator   Boolean            @default(false)
+  provenance           Json?
+  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(3)
+
+  sourceProvider SourceProvider @relation(fields: [sourceProviderId], references: [id], onDelete: Cascade)
+  catalogItem    CatalogItem    @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceProviderId, sourceRecordKey])
+  @@index([catalogItemId])
+  @@index([lifecycle, isMarketOrientator])
+  @@index([sourceDomain])
+  @@map("public_price_listings")
+}
+
+model SourceImportRun {
+  id               String                @id @default(cuid())
+  sourceProviderId String
+  status           SourceImportRunStatus @default(running)
+  parserVersion    String?
+  startedAt        DateTime              @default(now()) @db.Timestamptz(3)
+  finishedAt       DateTime?             @db.Timestamptz(3)
+  addedCount       Int                   @default(0)
+  changedCount     Int                   @default(0)
+  removedCount     Int                   @default(0)
+  error            String?
+  report           Json?
+
+  sourceProvider SourceProvider @relation(fields: [sourceProviderId], references: [id], onDelete: Cascade)
+
+  @@index([sourceProviderId, startedAt])
+  @@map("source_import_runs")
+}
+
+model CatalogDataVersion {
+  id        String   @id @default(cuid())
+  label     String
+  notes     String?
+  publishedAt DateTime @default(now()) @db.Timestamptz(3)
+  meta      Json?
+
+  @@map("catalog_data_versions")
+}
+

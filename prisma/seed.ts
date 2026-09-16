@@ -11,6 +11,10 @@ async function main() {
   await prisma.auditEvent.deleteMany();
   await prisma.organizationVerification.deleteMany();
   await prisma.importJob.deleteMany();
+  await prisma.sourceImportRun.deleteMany();
+  await prisma.publicPriceListing.deleteMany();
+  await prisma.sourceProvider.deleteMany();
+  await prisma.catalogDataVersion.deleteMany();
   await prisma.exportArtifact.deleteMany();
   await prisma.supplierResponse.deleteMany();
   await prisma.requestLine.deleteMany();
@@ -762,8 +766,15 @@ async function main() {
   const serviceCount = await prisma.catalogItem.count({ where: { kind: "service" } });
   const offerCount = await prisma.offer.count();
 
+  const { publishCuratedPublicSources } = await import("../src/modules/sources/publish");
+  const pub = await publishCuratedPublicSources({ actorUserId: "seed" });
+  const listingCount = await prisma.publicPriceListing.count({
+    where: { lifecycle: "published" },
+  });
+
   console.log("Seed complete:");
   console.log(`  products=${productCount} services=${serviceCount} offers=${offerCount}`);
+  console.log(`  publicListings=${listingCount} (added=${pub.added})`);
   console.log(`  demo password: ${DEMO_PASSWORD}`);
   console.log("  emails: buyer@ / supplier1@ / supplier2@ / contractor@ / admin@ demo.quathub.local");
 }

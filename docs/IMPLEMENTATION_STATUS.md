@@ -1,7 +1,7 @@
 # QuatHub — Implementation Status
 
 **Обновлено:** 2026-09-16  
-**Текущий этап:** Промпт 7R завершён → далее 7A
+**Текущий этап:** Промпт 7A завершён → далее 7B
 
 ## 1. Состояние репозитория
 
@@ -27,9 +27,20 @@
 
 **Проверено:** tests 53/53; typecheck; lint; build. Регресс: supplier denied, buyer idempotent, foreign orgId rejected.
 
+### Промпт 7A — Публичные услуги/цены (SourceProvider) ✅
+
+**Сделано:**
+- Schema: `SourceProvider`, provenance на `Offer` / `PublicPriceListing`; миграция `20260916140000_public_price_sources`.
+- Curated publish (ETL XXI ≥15, Elektrik24 ≥25), SSRF-safe HTTP, robots notes; autoSync=false.
+- Admin `/app/admin/sources`; provenance на карточке позиции каталога.
+- Docs: `docs/DATA_SOURCES.md`, `docs/data-sources/*.md`.
+- Seed: cleanup + `publishCuratedPublicSources`.
+
+**Проверено:** public-sources tests 6/6; typecheck; lint; build. Версии смет при publish не трогаются.
+
 ## 3. Следующий этап
 
-**7A** — реальные публичные услуги/цены (по реестру источников). Затем 7B → 8 → 9.
+**7B** — далее по плану. Затем 8 → 9.
 
 ## 4. Журнал
 
@@ -37,3 +48,4 @@
 |---|---|---|
 | 2026-09-16 | 0–7 | OK |
 | 2026-09-16 | 7R | OK — root cause digest 3822074729 = project:write |
+| 2026-09-16 | 7A | OK — curated public prices + SourceProvider |
