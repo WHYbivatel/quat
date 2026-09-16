@@ -7,6 +7,7 @@ export function buildExportModel(opts: {
   calc: CalcResult;
   variant: ExportVariant;
   versionNumber: number;
+  versionLabel?: string;
   preliminary?: boolean;
   composerName?: string | null;
 }): ExportDocumentModel {
@@ -69,7 +70,7 @@ export function buildExportModel(opts: {
       ? "Коммерческая смета — предварительный расчёт"
       : "Коммерческая смета",
     number: snapshot.estimate.number,
-    versionLabel: `v${opts.versionNumber}`,
+    versionLabel: opts.versionLabel ?? `v${opts.versionNumber}`,
     issuedAt: snapshot.issuedAt,
     currency: snapshot.estimate.currency,
     city: snapshot.project.cityName,

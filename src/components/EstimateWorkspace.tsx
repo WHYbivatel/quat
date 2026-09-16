@@ -100,6 +100,10 @@ export function EstimateWorkspace(props: Props) {
   const [pending, startTransition] = useTransition();
   const [priceDiffs, setPriceDiffs] = useState<PriceDiff[] | null>(null);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [clientRevision, setClientRevision] = useState(props.draftRevision);
+  const revision = Math.max(props.draftRevision, clientRevision);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfFallbackUrl, setPdfFallbackUrl] = useState<string | null>(null);
 
   const tabs = useMemo(
     () =>
@@ -120,13 +124,22 @@ export function EstimateWorkspace(props: Props) {
         setSaveState("error");
         setMessage(
           res.conflict
-            ? "Конфликт: смета изменена в другой вкладке. Обновите страницу."
+            ? res.error ||
+                "На сервере есть более новая редакция сметы. Обновите страницу и повторите."
             : res.error,
         );
         return;
       }
+      if (typeof res.revision === "number" && res.revision > 0) {
+        setClientRevision(res.revision);
+      }
       setSaveState("saved");
-      if (res.href) {
+      if (res.versionId) {
+        setMessage(`Версия создана. Открыть карточку версии.`);
+      }
+      if (res.href && res.versionId) {
+        // Keep editor; offer navigation via message link below
+      } else if (res.href) {
         router.push(res.href);
         return;
       }
@@ -151,7 +164,7 @@ export function EstimateWorkspace(props: Props) {
               {props.estimateTitle}
             </h1>
             <p className="text-xs text-[var(--muted)]">
-              Ревизия черновика: {props.draftRevision} · политика {props.policyVersion}
+              Ревизия черновика: {revision} · политика {props.policyVersion}
               {" · "}
               <span aria-live="polite">
                 {saveState === "saving" || pending
@@ -182,7 +195,10 @@ export function EstimateWorkspace(props: Props) {
           </div>
         </div>
         {message ? (
-          <p className="mt-2 text-sm text-[var(--danger)]" role="alert">
+          <p
+            className={`mt-2 text-sm ${saveState === "error" ? "text-[var(--danger)]" : "text-[var(--muted)]"}`}
+            role="alert"
+          >
             {message}
           </p>
         ) : null}
@@ -286,7 +302,7 @@ export function EstimateWorkspace(props: Props) {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
               fd.set("estimateId", props.estimateId);
-              fd.set("expectedRevision", String(props.draftRevision));
+              fd.set("expectedRevision", String(revision));
               run(() => props.actions.addManual(fd));
             }}
           >
@@ -324,7 +340,7 @@ export function EstimateWorkspace(props: Props) {
               const fd = new FormData(e.currentTarget);
               fd.set("projectId", props.projectId);
               fd.set("estimateId", props.estimateId);
-              fd.set("expectedRevision", String(props.draftRevision));
+              fd.set("expectedRevision", String(revision));
               run(() => props.actions.saveMeta(fd));
             }}
           >
@@ -378,7 +394,7 @@ export function EstimateWorkspace(props: Props) {
                   onClick={() => {
                     const fd = new FormData();
                     fd.set("sectionId", section.id);
-                    fd.set("expectedRevision", String(props.draftRevision));
+                    fd.set("expectedRevision", String(revision));
                     run(() => props.actions.duplicateSection(fd));
                   }}
                 >
@@ -417,7 +433,7 @@ export function EstimateWorkspace(props: Props) {
                                 e.preventDefault();
                                 const fd = new FormData(e.currentTarget);
                                 fd.set("lineId", line.id);
-                                fd.set("expectedRevision", String(props.draftRevision));
+                                fd.set("expectedRevision", String(revision));
                                 run(() => props.actions.saveLine(fd));
                               }}
                               className="flex flex-col gap-1"
@@ -463,7 +479,7 @@ export function EstimateWorkspace(props: Props) {
                               onClick={() => {
                                 const fd = new FormData();
                                 fd.set("lineId", line.id);
-                                fd.set("expectedRevision", String(props.draftRevision));
+                                fd.set("expectedRevision", String(revision));
                                 run(() => props.actions.removeLine(fd));
                               }}
                             >
@@ -493,7 +509,7 @@ export function EstimateWorkspace(props: Props) {
                 e.preventDefault();
                 const fd = new FormData(e.currentTarget);
                 fd.set("estimateId", props.estimateId);
-                fd.set("expectedRevision", String(props.draftRevision));
+                fd.set("expectedRevision", String(revision));
                 run(() => props.actions.addAdjustment(fd));
               }}
             >
@@ -540,7 +556,8 @@ export function EstimateWorkspace(props: Props) {
               onClick={() => {
                 const fd = new FormData();
                 fd.set("estimateId", props.estimateId);
-                fd.set("expectedRevision", String(props.draftRevision));
+                fd.set("expectedRevision", String(revision));
+                fd.set("idempotencyKey", `issue:${props.estimateId}:r${revision}:0`);
                 run(() => props.actions.issueVersion(fd));
               }}
             >
@@ -553,8 +570,9 @@ export function EstimateWorkspace(props: Props) {
                 onClick={() => {
                   const fd = new FormData();
                   fd.set("estimateId", props.estimateId);
-                  fd.set("expectedRevision", String(props.draftRevision));
+                  fd.set("expectedRevision", String(revision));
                   fd.set("allowPreliminary", "1");
+                  fd.set("idempotencyKey", `issue:${props.estimateId}:r${revision}:1`);
                   run(() => props.actions.issueVersion(fd));
                 }}
               >
@@ -563,39 +581,81 @@ export function EstimateWorkspace(props: Props) {
             ) : null}
             <button
               type="button"
-              className="w-full rounded-md border border-[var(--border)] px-3 py-2"
+              className="w-full rounded-md border border-[var(--border)] px-3 py-2 disabled:opacity-50"
+              disabled={pdfBusy || pending}
               onClick={() => {
+                if (pdfBusy) return;
+                setPdfBusy(true);
+                setSaveState("saving");
+                setMessage(null);
+                if (pdfFallbackUrl) {
+                  URL.revokeObjectURL(pdfFallbackUrl);
+                  setPdfFallbackUrl(null);
+                }
                 startTransition(async () => {
-                  setSaveState("saving");
-                  const res = await fetch("/api/exports/draft", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      estimateId: props.estimateId,
-                      expectedRevision: props.draftRevision,
-                      format: "pdf",
-                      variant: view === "internal" ? "internal" : "client",
-                    }),
-                  });
-                  if (!res.ok) {
+                  try {
+                    const res = await fetch("/api/exports/draft", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        estimateId: props.estimateId,
+                        expectedRevision: revision,
+                        format: "pdf",
+                        variant: view === "internal" ? "internal" : "client",
+                      }),
+                    });
+                    const ctype = res.headers.get("content-type") || "";
+                    if (!res.ok) {
+                      setSaveState("error");
+                      if (ctype.includes("application/json")) {
+                        setMessage((await res.json().catch(() => ({}))).error ?? "Ошибка экспорта");
+                      } else {
+                        setMessage(`Ошибка экспорта (${res.status}). Повторите.`);
+                      }
+                      return;
+                    }
+                    if (!ctype.includes("application/pdf")) {
+                      setSaveState("error");
+                      setMessage("Сервер вернул не PDF. Повторите или проверьте журнал.");
+                      return;
+                    }
+                    const blob = await res.blob();
+                    if (blob.size < 5 || !(await blob.slice(0, 4).text()).startsWith("%PDF")) {
+                      setSaveState("error");
+                      setMessage("Получен повреждённый PDF. Повторите.");
+                      return;
+                    }
+                    const url = URL.createObjectURL(blob);
+                    setPdfFallbackUrl(url);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `estimate-draft-r${revision}.pdf`;
+                    a.rel = "noopener";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setSaveState("saved");
+                    setMessage("PDF готов. Если загрузка не началась — откройте ссылку ниже.");
+                  } catch {
                     setSaveState("error");
-                    setMessage((await res.json().catch(() => ({}))).error ?? "Ошибка экспорта");
-                    return;
+                    setMessage("Не удалось подготовить PDF. Повторите.");
+                  } finally {
+                    setPdfBusy(false);
                   }
-                  const blob = await res.blob();
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `estimate-${props.estimateId}.pdf`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                  setSaveState("saved");
-                  router.refresh();
                 });
               }}
             >
-              PDF предварительный
+              {pdfBusy ? "Подготовка PDF…" : "PDF предварительный"}
             </button>
+            {pdfFallbackUrl ? (
+              <a
+                href={pdfFallbackUrl}
+                download={`estimate-draft-r${revision}.pdf`}
+                className="block text-center text-sm text-[var(--accent)] underline"
+              >
+                Скачать PDF ещё раз
+              </a>
+            ) : null}
             <button
               type="button"
               className="w-full rounded-md border border-[var(--border)] px-3 py-2"
@@ -644,7 +704,7 @@ export function EstimateWorkspace(props: Props) {
                     onClick={() => {
                       const fd = new FormData();
                       fd.set("estimateId", props.estimateId);
-                      fd.set("expectedRevision", String(props.draftRevision));
+                      fd.set("expectedRevision", String(revision));
                       fd.set("lineIds", priceDiffs.map((d) => d.lineId).join(","));
                       run(() => props.actions.applyPrices(fd));
                       setPriceDiffs(null);

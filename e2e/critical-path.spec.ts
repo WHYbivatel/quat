@@ -59,4 +59,13 @@ test.describe("critical path MVP", () => {
     expect(json.deploymentId).toBeTruthy();
     expect(json.calculationPolicyVersion).toBe("commercial-v1");
   });
+
+  test("guest draft has continue CTA", async ({ page }) => {
+    await page.goto("/draft");
+    await expect(page.getByRole("heading", { name: /локальный черновик/i })).toBeVisible();
+    const continueBtn = page.getByRole("link", {
+      name: /войти и продолжить|продолжить в редакторе|выбрать товары/i,
+    });
+    await expect(continueBtn.first()).toBeVisible();
+  });
 });

@@ -228,16 +228,23 @@ export async function issueVersionAction(formData: FormData): Promise<OkRev | Er
   const userId = await uid();
   if (!userId) return { ok: false, error: "Нужен вход" };
   try {
+    const estimateId = String(formData.get("estimateId") ?? "");
+    const expectedRevision = Number(formData.get("expectedRevision"));
+    const idempotencyKey =
+      String(formData.get("idempotencyKey") || "") ||
+      `issue:${estimateId}:r${expectedRevision}:${String(formData.get("allowPreliminary") ?? "0")}`;
     const result = await issueEstimateVersion({
       userId,
-      estimateId: String(formData.get("estimateId") ?? ""),
-      expectedRevision: Number(formData.get("expectedRevision")),
+      estimateId,
+      expectedRevision,
       allowPreliminary: String(formData.get("allowPreliminary") ?? "") === "1",
+      idempotencyKey,
     });
     return {
       ok: true,
-      revision: result.version.versionNumber, // page will reload for true draftRevision
+      revision: result.draftRevision,
       versionId: result.version.id,
+      href: `/app/versions/${result.version.id}`,
     };
   } catch (e) {
     return fail(e);
@@ -343,8 +350,13 @@ export async function importGuestDraftAction(formData: FormData): Promise<OkRev 
       offerId?: string;
       qty?: string;
     }>;
+    if (!Array.isArray(items) || items.length === 0) {
+      return { ok: false, error: "Нет позиций для переноса" };
+    }
+
     let estimateId = "";
     for (const item of items) {
+      if (!item.catalogItemId) continue;
       const r = await addCatalogItemToDraft({
         userId,
         projectId,
@@ -354,6 +366,8 @@ export async function importGuestDraftAction(formData: FormData): Promise<OkRev 
       });
       estimateId = r.estimateId;
     }
+    if (!estimateId) return { ok: false, error: "Не удалось добавить позиции" };
+
     return {
       ok: true,
       revision: 0,

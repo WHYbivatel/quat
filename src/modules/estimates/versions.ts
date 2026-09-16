@@ -8,7 +8,9 @@ import { buildCalcInputFromDraft } from "@/modules/pricing/from-draft";
 import type { CalcResult } from "@/modules/pricing";
 
 export class ConflictError extends Error {
-  constructor(message = "Conflict: draft was modified in another tab") {
+  constructor(
+    message = "На сервере есть более новая редакция сметы. Обновите данные и повторите.",
+  ) {
     super(message);
     this.name = "ConflictError";
   }
@@ -35,11 +37,13 @@ async function assertDraftRevision(
   }
   if (estimate.draftRevision !== expectedRevision) {
     throw new ConflictError(
-      `Ожидалась ревизия ${expectedRevision}, сейчас ${estimate.draftRevision}`,
+      `На сервере есть более новая редакция сметы (ревизия ${estimate.draftRevision}).`,
     );
   }
   return estimate;
 }
+
+export { assertDraftRevision };
 
 export async function bumpRevision(estimateId: string, expectedRevision: number) {
   const updated = await prisma.estimate.updateMany({
@@ -249,9 +253,9 @@ export async function issueEstimateVersion(opts: {
   estimateId: string;
   expectedRevision: number;
   allowPreliminary?: boolean;
+  idempotencyKey?: string;
 }) {
   const ctx = await requireAuthContext(opts.userId, "estimate:issue");
-  await assertDraftRevision(opts.estimateId, opts.expectedRevision, ctx.organizationId);
 
   const { snapshot, calc } = await buildSnapshot(opts.userId, opts.estimateId);
 
@@ -261,19 +265,59 @@ export async function issueEstimateVersion(opts: {
     );
   }
 
-  const last = await prisma.estimateVersion.findFirst({
-    where: { estimateId: opts.estimateId },
-    orderBy: { versionNumber: "desc" },
-  });
-  const versionNumber = (last?.versionNumber ?? 0) + 1;
+  const version = await prisma.$transaction(async (tx) => {
+    if (opts.idempotencyKey) {
+      const versions = await tx.estimateVersion.findMany({
+        where: { estimateId: opts.estimateId },
+        orderBy: { versionNumber: "desc" },
+        take: 30,
+      });
+      for (const v of versions) {
+        const s = v.snapshot as { idempotencyKey?: string | null };
+        if (s?.idempotencyKey === opts.idempotencyKey) {
+          const estimate = await tx.estimate.findUniqueOrThrow({
+            where: { id: opts.estimateId },
+          });
+          return {
+            version: v,
+            draftRevision: estimate.draftRevision,
+            replayed: true as const,
+          };
+        }
+      }
+    }
 
-    const version = await prisma.$transaction(async (tx) => {
+    const estimate = await tx.estimate.findUnique({
+      where: { id: opts.estimateId },
+      include: { project: true },
+    });
+    if (!estimate || estimate.project.organizationId !== ctx.organizationId) {
+      throw new NotFoundError("Estimate not found");
+    }
+    if (estimate.draftRevision !== opts.expectedRevision) {
+      throw new ConflictError(
+        `На сервере есть более новая редакция сметы (ревизия ${estimate.draftRevision}).`,
+      );
+    }
+
+    const last = await tx.estimateVersion.findFirst({
+      where: { estimateId: opts.estimateId },
+      orderBy: { versionNumber: "desc" },
+    });
+    const versionNumber = (last?.versionNumber ?? 0) + 1;
+
+    const snapWithMeta = {
+      ...snapshot,
+      originDraftRevision: opts.expectedRevision,
+      idempotencyKey: opts.idempotencyKey ?? null,
+    };
+
     const v = await tx.estimateVersion.create({
       data: {
         estimateId: opts.estimateId,
         versionNumber,
         issuedById: opts.userId,
-        snapshot: snapshot as unknown as Prisma.InputJsonValue,
+        snapshot: snapWithMeta as unknown as Prisma.InputJsonValue,
         calcResult: calc as unknown as Prisma.InputJsonValue,
         calculationPolicyVersion: calc.calculationPolicyVersion,
         documentKind: calc.complete ? "commercial_fixed" : "commercial_preliminary",
@@ -287,10 +331,20 @@ export async function issueEstimateVersion(opts: {
     if (bumped.count !== 1) {
       throw new ConflictError();
     }
-    return v;
+    return {
+      version: v,
+      draftRevision: opts.expectedRevision + 1,
+      replayed: false as const,
+    };
   });
 
-  return { version, calc, snapshot };
+  return {
+    version: version.version,
+    calc,
+    snapshot,
+    draftRevision: version.draftRevision,
+    replayed: version.replayed,
+  };
 }
 
 export async function listVersions(userId: string, estimateId: string) {

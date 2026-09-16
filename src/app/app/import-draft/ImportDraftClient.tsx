@@ -60,7 +60,10 @@ export default function ImportDraftClient({
           {projects.length === 0 ? (
             <p className="mt-4 text-sm text-[var(--danger)]">
               Сначала создайте проект.{" "}
-              <Link href="/app/projects" className="underline">
+              <Link
+                href={`/app/projects?next=${encodeURIComponent("/app/import-draft")}`}
+                className="underline"
+              >
                 Мои проекты
               </Link>
             </p>
@@ -90,6 +93,10 @@ export default function ImportDraftClient({
                     const fd = new FormData();
                     fd.set("projectId", projectId);
                     fd.set("payload", payload);
+                    fd.set(
+                      "idempotencyKey",
+                      `import:${projectId}:${payload.length}:${lines.map((l) => l.localId).join(",")}`,
+                    );
                     const res = await importGuestDraftAction(fd);
                     if (!res.ok) {
                       setMsg(res.error);

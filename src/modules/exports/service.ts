@@ -7,8 +7,8 @@ import { NotFoundError, AccessDeniedError } from "@/lib/permissions";
 import {
   getVersionForUser,
   buildSnapshot,
-  issueEstimateVersion,
   type EstimateSnapshot,
+  ConflictError,
 } from "@/modules/estimates/versions";
 import type { CalcResult } from "@/modules/pricing";
 import { buildExportModel, canonicalTotals } from "./model";
@@ -170,7 +170,7 @@ export async function exportVersionDocument(opts: {
   }
 }
 
-/** Draft export: issue/use preliminary snapshot then export (no live catalog re-read). */
+/** Draft export: snapshot of current draft — does NOT create EstimateVersion. */
 export async function exportDraftDocument(opts: {
   userId: string;
   estimateId: string;
@@ -178,18 +178,99 @@ export async function exportDraftDocument(opts: {
   format: ExportFormat;
   variant: ExportVariant;
 }) {
-  const issued = await issueEstimateVersion({
-    userId: opts.userId,
-    estimateId: opts.estimateId,
-    expectedRevision: opts.expectedRevision,
-    allowPreliminary: true,
+  checkRate(opts.userId);
+
+  if (opts.variant === "internal") {
+    await requireAuthContext(opts.userId, "export:internal");
+  } else {
+    await requireAuthContext(opts.userId, "export:client");
+  }
+
+  const ctx = await requireAuthContext(opts.userId, "estimate:read");
+  const estimate = await prisma.estimate.findUnique({
+    where: { id: opts.estimateId },
+    include: { project: true },
   });
-  return exportVersionDocument({
-    userId: opts.userId,
-    versionId: issued.version.id,
-    format: opts.format,
+  if (!estimate || estimate.project.organizationId !== ctx.organizationId) {
+    throw new NotFoundError("Estimate not found");
+  }
+  if (estimate.draftRevision !== opts.expectedRevision) {
+    throw new ConflictError(
+      `На сервере есть более новая редакция сметы (ревизия ${estimate.draftRevision}).`,
+    );
+  }
+
+  const { snapshot, calc } = await buildSnapshot(opts.userId, opts.estimateId);
+
+  // Re-check after snapshot (another writer may have raced)
+  const again = await prisma.estimate.findUnique({ where: { id: opts.estimateId } });
+  if (!again || again.draftRevision !== opts.expectedRevision) {
+    throw new ConflictError(
+      `На сервере есть более новая редакция сметы (ревизия ${again?.draftRevision ?? "?"}).`,
+    );
+  }
+
+  if (snapshot.lines.length > MAX_LINES) {
+    throw new ExportTooLargeError(`Максимум ${MAX_LINES} строк в экспорте`);
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: opts.userId } });
+  const model = buildExportModel({
+    snapshot,
+    calc,
     variant: opts.variant,
+    versionNumber: 0,
+    versionLabel: `черновик r${opts.expectedRevision}`,
+    preliminary: true,
+    composerName: user?.name ?? user?.email ?? null,
   });
+
+  const artifact = await prisma.exportArtifact.create({
+    data: {
+      versionId: null,
+      format: opts.format,
+      variant: opts.variant,
+      status: "running",
+      createdById: opts.userId,
+    },
+  });
+
+  try {
+    const buffer = await render(opts.format, model);
+    await ensureStorage();
+    const base = safeFileBase(
+      `${snapshot.estimate.number}_draft-r${opts.expectedRevision}_${opts.variant}`,
+    );
+    const filename = `${base}.${opts.format}`;
+    const storageKey = path.join(STORAGE_ROOT, `${artifact.id}_${filename}`);
+    await writeFile(storageKey, buffer);
+    const checksum = createHash("sha256").update(buffer).digest("hex");
+
+    await prisma.exportArtifact.update({
+      where: { id: artifact.id },
+      data: { status: "ready", storageKey, checksum },
+    });
+
+    return {
+      artifactId: artifact.id,
+      filename,
+      contentType: contentType(opts.format),
+      buffer,
+      checksum,
+      canonicalTotals: canonicalTotals(model),
+      model,
+      draftRevision: opts.expectedRevision,
+    };
+  } catch (e) {
+    await prisma.exportArtifact.update({
+      where: { id: artifact.id },
+      data: {
+        status: "failed",
+        error: e instanceof Error ? e.message.slice(0, 500) : "export failed",
+      },
+    });
+    throw e;
+  }
 }
 
 export async function getExportArtifactForUser(userId: string, artifactId: string) {
