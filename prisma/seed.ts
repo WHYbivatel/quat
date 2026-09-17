@@ -206,7 +206,7 @@ async function main() {
     data: { code: "voltage_v", nameRu: "Напряжение, В", valueType: "number", sortOrder: 4 },
   });
   const attrPoles = await prisma.attributeDefinition.create({
-    data: { code: "poles", nameRu: "Полюса", valueType: "number", sortOrder: 1 },
+    data: { code: "poles", nameRu: "Число полюсов", valueType: "number", sortOrder: 1 },
   });
   const attrCurrent = await prisma.attributeDefinition.create({
     data: { code: "rated_current_a", nameRu: "Номинальный ток, А", valueType: "number", sortOrder: 2 },

@@ -54,7 +54,10 @@ async function uid() {
 
 export async function addToEstimateAction(
   formData: FormData,
-): Promise<{ ok: true; href: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; href: string; estimateId: string; projectId: string }
+  | { ok: false; error: string }
+> {
   const userId = await uid();
   if (!userId) return { ok: false, error: "Нужен вход" };
   try {
@@ -65,9 +68,12 @@ export async function addToEstimateAction(
       offerId: formData.get("offerId") ? String(formData.get("offerId")) : undefined,
       qty: String(formData.get("qty") ?? "1"),
     });
+    const href = `/app/projects/${result.projectId}/estimates/${result.estimateId}`;
     return {
       ok: true,
-      href: `/app/projects/${result.projectId}/estimates/${result.estimateId}`,
+      href,
+      estimateId: result.estimateId,
+      projectId: result.projectId,
     };
   } catch (e) {
     return fail(e);

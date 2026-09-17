@@ -134,6 +134,31 @@ export async function addCatalogItemToDraft(opts: {
   const maxSort =
     estimate.lines.reduce((m, l) => Math.max(m, l.sortOrder), -1) + 1;
 
+  const offerId = offer?.id ?? null;
+  const existingLine = estimate.lines.find(
+    (l) =>
+      l.catalogItemId === item.id &&
+      (l.offerId ?? null) === offerId &&
+      l.unitSnapshot === item.baseUnit.code &&
+      String(l.unitSalePrice ?? "") === String(unitPurchase ?? "") &&
+      (l.discountPercent == null || String(l.discountPercent) === "0"),
+  );
+
+  if (existingLine) {
+    const prev = Number(existingLine.qty);
+    const inc = Number(opts.qty ?? "1");
+    const nextQty = String((Number.isFinite(prev) ? prev : 0) + (Number.isFinite(inc) ? inc : 1));
+    await prisma.estimateLine.update({
+      where: { id: existingLine.id },
+      data: { qty: nextQty },
+    });
+    await prisma.estimate.update({
+      where: { id: estimate.id },
+      data: { draftRevision: { increment: 1 } },
+    });
+    return { estimateId: estimate.id, projectId: opts.projectId, lineId: existingLine.id };
+  }
+
   const line = await prisma.estimateLine.create({
     data: {
       estimateId: estimate.id,

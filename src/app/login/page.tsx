@@ -6,6 +6,8 @@ import { safeReturnTo } from "@/lib/safe-url";
 import { assertRateLimit, RateLimitError } from "@/lib/rate-limit";
 import { headers } from "next/headers";
 
+import { Panel } from "@/components/ui";
+
 async function clientKey() {
   const h = await headers();
   return (
@@ -62,39 +64,40 @@ export default async function LoginPage({
   if (session?.user) {
     return (
       <main className="mx-auto flex min-h-full w-full max-w-md flex-1 flex-col justify-center px-6 py-16">
-        <Link href="/" className="text-sm font-semibold text-[var(--accent)]">
-          QuatHub
-        </Link>
-        <h1 className="mt-4 font-[family-name:var(--font-display)] text-3xl">
-          Вы уже вошли
-        </h1>
-        <p className="mt-2 text-sm text-[var(--muted)]">{session.user.email}</p>
-        <div className="mt-8 flex flex-col gap-3">
-          <Link
-            href={next}
-            className="rounded-md bg-[var(--accent)] px-4 py-2 text-center text-sm font-semibold text-white"
-          >
-            Продолжить
+        <Panel padding="md">
+          <Link href="/catalog/products" className="text-sm font-semibold">
+            QuatHub
           </Link>
-          <Link href="/catalog/products" className="text-center text-sm underline">
-            В каталог
-          </Link>
-          <form action={logoutAction}>
-            <button type="submit" className="w-full text-sm text-[var(--muted)] underline">
-              Выйти / сменить аккаунт
-            </button>
-          </form>
-        </div>
+          <h1 className="mt-4 text-2xl font-semibold">Вы уже вошли</h1>
+          <p className="mt-2 text-sm text-[var(--muted)]">{session.user.email}</p>
+          <div className="mt-8 flex flex-col gap-3">
+            <Link
+              href={next}
+              className="rounded-[var(--radius-button)] bg-[var(--brand)] px-4 py-2 text-center text-sm font-semibold text-[var(--brand-foreground)]"
+            >
+              Продолжить
+            </Link>
+            <Link href="/catalog/products" className="text-center text-sm underline">
+              В каталог
+            </Link>
+            <form action={logoutAction}>
+              <button type="submit" className="w-full text-sm text-[var(--muted)] underline">
+                Выйти / сменить аккаунт
+              </button>
+            </form>
+          </div>
+        </Panel>
       </main>
     );
   }
 
   return (
     <main className="mx-auto flex min-h-full w-full max-w-md flex-1 flex-col justify-center px-6 py-16">
-      <Link href="/" className="text-sm font-semibold text-[var(--accent)]">
-        QuatHub — на главную
+      <Panel padding="md">
+      <Link href="/catalog/products" className="text-sm font-semibold">
+        QuatHub
       </Link>
-      <h1 className="mt-4 font-[family-name:var(--font-display)] text-3xl">
+      <h1 className="mt-4 text-2xl font-semibold">
         Вход в QuatHub
       </h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
@@ -110,7 +113,7 @@ export default async function LoginPage({
             type="email"
             required
             autoComplete="username"
-            className="rounded-md border border-[var(--border)] bg-white px-3 py-2"
+            className="h-11 rounded-[var(--radius-input)] border border-[var(--border)] bg-[var(--surface)] px-3"
             defaultValue="buyer@demo.quathub.local"
           />
         </label>
@@ -121,7 +124,7 @@ export default async function LoginPage({
             type="password"
             required
             autoComplete="current-password"
-            className="rounded-md border border-[var(--border)] bg-white px-3 py-2"
+            className="h-11 rounded-[var(--radius-input)] border border-[var(--border)] bg-[var(--surface)] px-3"
             defaultValue="Demo1234!"
           />
         </label>
@@ -137,7 +140,7 @@ export default async function LoginPage({
         ) : null}
         <button
           type="submit"
-          className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
+          className="rounded-[var(--radius-button)] bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-[var(--brand-foreground)]"
         >
           Войти
         </button>
@@ -153,6 +156,7 @@ export default async function LoginPage({
           Подробнее
         </Link>
       </p>
+      </Panel>
     </main>
   );
 }

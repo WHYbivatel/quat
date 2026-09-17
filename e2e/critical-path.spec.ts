@@ -8,11 +8,11 @@ test.describe("critical path MVP", () => {
     page,
   }) => {
     await page.goto("/catalog/products");
-    await expect(page.getByRole("heading", { name: /товар/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Товары" }).first()).toBeVisible();
+    await expect(page.getByText(/найдено/i).first()).toBeVisible();
 
     await page.goto("/catalog/services");
-    await expect(page.getByRole("heading", { name: /услуг/i })).toBeVisible();
-    // Public curated sources from 7A should appear after seed/publish
+    await expect(page.getByRole("link", { name: "Услуги" }).first()).toBeVisible();
     const body = await page.locator("main").innerText();
     expect(body.length).toBeGreaterThan(40);
 
@@ -25,8 +25,7 @@ test.describe("critical path MVP", () => {
     });
 
     await expect(page.locator("h1")).toBeVisible();
-    await expect(page.getByRole("link", { name: /товар/i }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: /услуг/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /каталог/i }).first()).toBeVisible();
 
     // Login return path preserves next=
     await page.goto("/login?next=/catalog/services");
@@ -36,7 +35,7 @@ test.describe("critical path MVP", () => {
 
     await page.goto("/login");
     await page.getByRole("button", { name: /выйти/i }).click();
-    await page.waitForURL((url) => url.pathname === "/");
+    await page.waitForURL((url) => url.pathname === "/" || url.pathname.startsWith("/catalog"));
     await page.goto("/app/projects");
     await page.waitForURL((url) => url.pathname.startsWith("/login"));
   });
@@ -60,13 +59,10 @@ test.describe("critical path MVP", () => {
     expect(json.calculationPolicyVersion).toBe("commercial-v1");
   });
 
-  test("guest draft has continue CTA", async ({ page }) => {
+  test("guest draft redirects to catalog workspace", async ({ page }) => {
     await page.goto("/draft");
-    await expect(page.getByRole("heading", { name: /локальный черновик/i })).toBeVisible();
-    const continueBtn = page.getByRole("link", {
-      name: /войти и продолжить|продолжить в редакторе|выбрать товары/i,
-    });
-    await expect(continueBtn.first()).toBeVisible();
+    await page.waitForURL((url) => url.pathname.startsWith("/catalog"));
+    await expect(page.getByText(/смета/i).first()).toBeVisible();
   });
 
   test("capabilities page and coming-soon are honest", async ({ page, request }) => {
@@ -76,7 +72,7 @@ test.describe("critical path MVP", () => {
     await expect(page.locator('a[href="#"]')).toHaveCount(0);
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByRole("link", { name: /тестовый стенд|возможности/i }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /возможности стенда/i })).toBeVisible();
 
     await page.goto("/coming-soon?feature=normative.kz");
     await expect(page.getByRole("heading", { name: /норматив/i })).toBeVisible();

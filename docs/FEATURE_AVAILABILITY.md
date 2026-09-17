@@ -1,6 +1,9 @@
-# Feature Availability — QuatHub
+## UX redesign (2026-09-17)
 
-Источник истины в коде: `src/modules/features/registry.ts`.  
+Рабочий путь покупателя: `/catalog/*` + панель сметы, шапка без future-разделов.  
+Матрица статусов featureId ниже **по коду** актуальна; бейджи LIMITED не показываются в основном каталоге покупателя.
+
+  
 Публично: [/capabilities](/capabilities) · API `GET /api/capabilities`.  
 Админ: `/app/admin/capabilities`.
 

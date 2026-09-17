@@ -2,10 +2,20 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { CatalogFilters } from "@/components/CatalogFilters";
-import { FeatureStatusBadge } from "@/components/features/FeatureStatusBadge";
+import { AddToEstimateButton } from "@/components/AddToEstimateButton";
+import { EstimateSidePanel } from "@/components/EstimateSidePanel";
+import { EstimateMobileChrome } from "@/components/EstimateMobileChrome";
 import {
-  serializeOfferPrice,
-} from "@/modules/catalog/queries";
+  Button,
+  CatalogRow,
+  Panel,
+  PanelBody,
+  PanelDivider,
+  PanelToolbar,
+  PanelToolbarRow,
+  Workspace,
+} from "@/components/ui";
+import { serializeOfferPrice } from "@/modules/catalog/queries";
 import {
   cachedCategoryFilters,
   cachedListNavigableCategories,
@@ -13,7 +23,22 @@ import {
 } from "@/modules/catalog/cached";
 import { prisma } from "@/lib/db";
 import type { CatalogItemKind } from "@prisma/client";
-import { getFeature } from "@/modules/features/registry";
+import { auth } from "@/lib/auth";
+import { listProjectsForUser } from "@/modules/projects/service";
+import { addToEstimateAction } from "@/app/actions/estimate";
+
+const UNIT_LABEL: Record<string, string> = {
+  pcs: "шт.",
+  m: "м",
+  m2: "м²",
+  kg: "кг",
+  set: "компл.",
+  point: "точка",
+  visit: "выезд",
+  hour: "час",
+  contour: "контур",
+  cable_line: "каб. линия",
+};
 
 function parseParams(
   kind: CatalogItemKind,
@@ -40,175 +65,205 @@ function parseParams(
   };
 }
 
+function numericOfferPrice(offer: {
+  priceType: string;
+  price: { toString(): string } | null;
+  priceMin: { toString(): string } | null;
+}) {
+  if (offer.priceType === "fixed" && offer.price != null) return offer.price.toString();
+  if (offer.priceType === "from" && offer.priceMin != null) return offer.priceMin.toString();
+  return null;
+}
+
 export async function CatalogPage({
   kind,
-  title,
   searchParams,
 }: {
   kind: CatalogItemKind;
-  title: string;
+  title?: string;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
   const params = parseParams(kind, sp);
-  const [categories, result, cities, units, attrFilters] = await Promise.all([
+  const session = await auth();
+  const [categories, result, cities, units, attrFilters, projects] = await Promise.all([
     cachedListNavigableCategories(kind),
     cachedSearchCatalogItems(params),
     prisma.city.findMany({ orderBy: { nameRu: "asc" } }),
     prisma.unit.findMany({ orderBy: { code: "asc" } }),
     cachedCategoryFilters(params.category),
+    session?.user?.id
+      ? listProjectsForUser(session.user.id).then((ps) =>
+          ps.map((p) => ({ id: p.id, name: p.name })),
+        )
+      : Promise.resolve([] as { id: string; name: string }[]),
   ]);
 
-  const basePath =
-    kind === "product" ? "/catalog/products" : "/catalog/services";
+  const basePath = kind === "product" ? "/catalog/products" : "/catalog/services";
+  const otherPath = kind === "product" ? "/catalog/services" : "/catalog/products";
+  const importHref =
+    projects.length > 0 ? "/app/import-draft" : session?.user ? "/app/projects" : "/app/import-draft";
 
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
-        <h1 className="flex flex-wrap items-center gap-2 font-[family-name:var(--font-display)] text-3xl">
-          {title}
-          {kind === "service" ? (
-            <FeatureStatusBadge status={getFeature("catalog.public_prices").status} />
-          ) : null}
-        </h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          {kind === "service" ? (
-            <>
-              {getFeature("catalog.public_prices").limitation} Демо-позиции — учебные
-              данные.
-            </>
-          ) : (
-            <>
-              Учебные демо-цены. Не рыночные и не нормативные. Совместимость
-              оборудования не оценивается.
-            </>
-          )}
-        </p>
-        {typeof sp.projectId === "string" && sp.projectId ? (
-          <p className="mt-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
-            Добавление в проект сметы.{" "}
-            <Link href="/app/projects" className="text-[var(--accent)] underline">
-              К моим проектам
-            </Link>
-          </p>
-        ) : null}
+      <Workspace>
+        <main className="qh-catalog-col flex min-h-0 min-w-0 flex-col pb-0">
+          <Panel padding="none" className="qh-catalog-panel" data-testid="catalog-panel">
+            <PanelToolbar>
+              <PanelToolbarRow>
+                <div className="inline-flex rounded-[var(--radius-button)] border border-[var(--border)] bg-[var(--control)] p-0.5">
+                  <Link
+                    href="/catalog/products"
+                    className={`min-h-10 rounded-[8px] px-3 text-sm font-medium leading-10 ${
+                      kind === "product"
+                        ? "bg-[var(--brand)] text-[var(--brand-foreground)]"
+                        : "text-[var(--text-secondary)]"
+                    }`}
+                  >
+                    Товары
+                  </Link>
+                  <Link
+                    href="/catalog/services"
+                    className={`min-h-10 rounded-[8px] px-3 text-sm font-medium leading-10 ${
+                      kind === "service"
+                        ? "bg-[var(--brand)] text-[var(--brand-foreground)]"
+                        : "text-[var(--text-secondary)]"
+                    }`}
+                  >
+                    Услуги
+                  </Link>
+                </div>
+                <p className="shrink-0 text-sm text-[var(--text-secondary)]">Найдено: {result.total}</p>
+              </PanelToolbarRow>
 
-        <div className="mt-6">
-          <Suspense fallback={<p className="text-sm text-[var(--muted)]">Загрузка фильтров…</p>}>
-            <CatalogFilters
-              kind={kind}
-              categories={categories.map((c) => ({ slug: c.slug, nameRu: c.nameRu }))}
-              attributeFilters={attrFilters.map((a) => ({
-                code: a.code,
-                nameRu: a.nameRu,
-                valueType: a.valueType,
-                enumOptions: a.enumOptions,
-              }))}
-              units={units.map((u) => ({ code: u.code, nameRu: u.nameRu }))}
-              cities={cities.map((c) => ({ id: c.id, nameRu: c.nameRu }))}
-            />
-          </Suspense>
-        </div>
-
-        <p className="mt-4 text-sm text-[var(--muted)]" role="status">
-          Найдено: {result.total} · стр. {result.page}/{result.pageCount}
-        </p>
-
-        {result.items.length === 0 ? (
-          <div
-            className="mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-[var(--muted)]"
-            role="status"
-          >
-            Ничего не найдено. Измените фильтры или сбросьте их.
-          </div>
-        ) : (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-left text-[var(--muted)]">
-                  <th className="px-3 py-2 font-medium">Название</th>
-                  <th className="px-3 py-2 font-medium">Категория</th>
-                  <th className="px-3 py-2 font-medium">Ед.</th>
-                  <th className="px-3 py-2 font-medium">Предложения</th>
-                  <th className="px-3 py-2 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
-                {result.items.map((item) => {
-                  const offers = item.offers.slice(0, 2).map((o) => serializeOfferPrice(o));
-                  return (
-                    <tr key={item.id} className="border-b border-[var(--border)] align-top">
-                      <td className="px-3 py-3">
-                        <div className="font-medium">{item.name}</div>
-                        <div className="text-[var(--muted)]">{item.sku}</div>
-                        {item.isDemo ? (
-                          <span className="mt-1 inline-block text-xs text-[var(--accent-2)]">
-                            демо
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3">{item.category.nameRu}</td>
-                      <td className="px-3 py-3">{item.baseUnit.nameRu}</td>
-                      <td className="px-3 py-3">
-                        {offers.length === 0 ? (
-                          <span className="text-[var(--muted)]">нет предложений</span>
-                        ) : (
-                          <ul className="space-y-1">
-                            {offers.map((o, i) => (
-                              <li key={i}>
-                                {o.label}
-                                <span className="text-[var(--muted)]"> · {o.vatLabel}</span>
-                                {o.expired ? (
-                                  <span className="text-[var(--danger)]"> · просрочено</span>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        <Link
-                          href={`/catalog/items/${item.id}`}
-                          className="font-semibold text-[var(--accent)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
-                        >
-                          Открыть
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {result.pageCount > 1 ? (
-          <nav className="mt-4 flex gap-2" aria-label="Страницы">
-            {Array.from({ length: result.pageCount }, (_, i) => i + 1).map((p) => {
-              const qs = new URLSearchParams();
-              for (const [k, v] of Object.entries(sp)) {
-                if (typeof v === "string" && k !== "page") qs.set(k, v);
-              }
-              qs.set("page", String(p));
-              return (
-                <Link
-                  key={p}
-                  href={`${basePath}?${qs.toString()}`}
-                  aria-current={p === result.page ? "page" : undefined}
-                  className={`rounded-md px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
-                    p === result.page
-                      ? "bg-[var(--accent)] text-white"
-                      : "border border-[var(--border)] bg-[var(--surface)]"
-                  }`}
+              <PanelToolbarRow className="items-stretch sm:items-center">
+                <Suspense
+                  fallback={<p className="text-sm text-[var(--text-secondary)]">Фильтры…</p>}
                 >
-                  {p}
+                  <CatalogFilters
+                    kind={kind}
+                    categories={categories.map((c) => ({ slug: c.slug, nameRu: c.nameRu }))}
+                    attributeFilters={attrFilters.map((a) => ({
+                      code: a.code,
+                      nameRu: a.code === "poles" ? "Число полюсов" : a.nameRu,
+                      valueType: a.valueType,
+                      enumOptions: a.enumOptions,
+                    }))}
+                    units={units.map((u) => ({ code: u.code, nameRu: u.nameRu }))}
+                    cities={cities.map((c) => ({ id: c.id, nameRu: c.nameRu }))}
+                  />
+                </Suspense>
+              </PanelToolbarRow>
+            </PanelToolbar>
+
+            <PanelDivider />
+
+            <PanelBody>
+              {result.items.length === 0 ? (
+                <div className="px-6 py-10 text-center text-[var(--text-secondary)]" role="status">
+                  <p>Ничего не найдено.</p>
+                  <Link href={basePath} className="mt-3 inline-block text-sm font-medium underline">
+                    Сбросить фильтры
+                  </Link>
+                </div>
+              ) : (
+                result.items.map((item) => {
+                  const primary = item.offers[0];
+                  const price = primary ? serializeOfferPrice(primary) : null;
+                  const unitPrice = primary ? numericOfferPrice(primary) : null;
+                  const attrs = item.attributes
+                    .slice(0, 3)
+                    .map((a) => `${a.attributeDefinition.nameRu}: ${a.value}`)
+                    .join(" · ");
+                  return (
+                    <CatalogRow
+                      key={item.id}
+                      name={
+                        <Link href={`/catalog/items/${item.id}`} className="hover:underline">
+                          {item.name}
+                        </Link>
+                      }
+                      meta={attrs || item.sku || item.category.nameRu}
+                      price={unitPrice}
+                      unit={UNIT_LABEL[item.baseUnit.code] ?? item.baseUnit.nameRu}
+                      unknownPrice={!unitPrice}
+                      supplier={primary?.supplier.name}
+                      demo={item.isDemo}
+                      action={
+                        primary || item.kind === "service" ? (
+                          <AddToEstimateButton
+                            catalogItemId={item.id}
+                            offerId={primary?.id}
+                            name={item.name}
+                            unit={item.baseUnit.code}
+                            priceLabel={price?.label ?? "По запросу"}
+                            unitPrice={unitPrice}
+                            kind={item.kind}
+                            projects={projects}
+                            isAuthenticated={Boolean(session?.user)}
+                            activeProjectId={projects[0]?.id}
+                            addAction={addToEstimateAction}
+                            compact
+                          />
+                        ) : (
+                          <Link href={`/catalog/items/${item.id}`}>
+                            <Button size="sm" variant="secondary">
+                              Подробнее
+                            </Button>
+                          </Link>
+                        )
+                      }
+                    />
+                  );
+                })
+              )}
+
+              {result.pageCount > 1 ? (
+                <nav className="flex flex-wrap gap-2 px-6 py-4" aria-label="Страницы">
+                  {Array.from({ length: result.pageCount }, (_, i) => i + 1).map((p) => {
+                    const qs = new URLSearchParams();
+                    for (const [k, v] of Object.entries(sp)) {
+                      if (typeof v === "string" && k !== "page") qs.set(k, v);
+                    }
+                    qs.set("page", String(p));
+                    return (
+                      <Link
+                        key={p}
+                        href={`${basePath}?${qs.toString()}`}
+                        aria-current={p === result.page ? "page" : undefined}
+                        className={`rounded-[var(--radius-button)] px-3 py-1.5 text-sm ${
+                          p === result.page
+                            ? "bg-[var(--brand)] font-semibold text-[var(--brand-foreground)]"
+                            : "border border-[var(--border)] bg-[var(--control)]"
+                        }`}
+                      >
+                        {p}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              ) : null}
+
+              <p className="px-6 pb-5 text-xs text-[var(--text-secondary)]">
+                Учебные демо-цены.{" "}
+                <Link href={otherPath} className="underline">
+                  {kind === "product" ? "К услугам" : "К товарам"}
                 </Link>
-              );
-            })}
-          </nav>
-        ) : null}
-      </main>
+              </p>
+            </PanelBody>
+          </Panel>
+        </main>
+
+        <EstimateSidePanel
+          isAuthenticated={Boolean(session?.user)}
+          importHref={importHref}
+        />
+      </Workspace>
+      <EstimateMobileChrome
+        isAuthenticated={Boolean(session?.user)}
+        importHref={importHref}
+      />
     </>
   );
 }

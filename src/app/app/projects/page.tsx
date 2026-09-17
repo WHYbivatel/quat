@@ -21,6 +21,7 @@ import { applyTemplateAction } from "@/app/actions/estimate";
 import { listTemplates } from "@/modules/estimates/price-refresh";
 import { publicErrorRef } from "@/lib/safe-url";
 import { CreateProjectForm } from "@/components/CreateProjectForm";
+import { Panel } from "@/components/ui";
 
 async function switchOrgAction(formData: FormData) {
   "use server";
@@ -122,29 +123,31 @@ export default async function ProjectsPage({
     return (
       <>
         <SiteHeader />
-        <main className="mx-auto max-w-xl px-4 py-10">
-          <h1 className="text-2xl font-semibold">Нужна организация</h1>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Каталог доступен без организации. Чтобы сохранять сметы — создайте
-            организацию покупателя.
-          </p>
-          <form action={createOrgAction} className="mt-6 flex flex-col gap-3">
-            <input
-              name="name"
-              required
-              placeholder="Название организации"
-              className="rounded-md border px-3 py-2"
-            />
-            <button
-              type="submit"
-              className="rounded-md bg-[var(--accent)] px-4 py-2 text-white"
-            >
-              Создать организацию
-            </button>
-          </form>
-          <Link href="/catalog/products" className="mt-4 inline-block text-sm underline">
-            В каталог товаров
-          </Link>
+        <main className="mx-auto w-full max-w-xl flex-1 px-[var(--workspace-pad-mobile)] py-10 lg:px-[var(--workspace-pad)]">
+          <Panel padding="md">
+            <h1 className="text-2xl font-semibold">Нужна организация</h1>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Каталог доступен без организации. Чтобы сохранять сметы — создайте
+              организацию покупателя.
+            </p>
+            <form action={createOrgAction} className="mt-6 flex flex-col gap-3">
+              <input
+                name="name"
+                required
+                placeholder="Название организации"
+                className="h-11 rounded-[var(--radius-input)] border border-[var(--border)] bg-[var(--control)] px-3"
+              />
+              <button
+                type="submit"
+                className="rounded-[var(--radius-button)] bg-[var(--brand)] px-4 py-2 font-semibold text-[var(--brand-foreground)]"
+              >
+                Создать организацию
+              </button>
+            </form>
+            <Link href="/catalog/products" className="mt-4 inline-block text-sm underline">
+              В каталог товаров
+            </Link>
+          </Panel>
         </main>
       </>
     );
@@ -175,11 +178,11 @@ export default async function ProjectsPage({
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-[var(--workspace-pad-mobile)] py-8 lg:px-[var(--workspace-pad)]">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="font-[family-name:var(--font-display)] text-3xl">
-              Мои проекты
+            <h1 className="text-2xl font-semibold">
+              Мои сметы
             </h1>
             <p className="mt-1 text-sm text-[var(--muted)]">
               Организация: <strong>{ctx.organization.name}</strong> ({ctx.role})
@@ -263,7 +266,7 @@ export default async function ProjectsPage({
           </div>
         )}
 
-        <ul className="mt-6 divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+        <ul className="mt-6 divide-y divide-[var(--border)] overflow-hidden rounded-[var(--radius-panel)] border border-[var(--border)] bg-[var(--panel)]">
           {withEstimates.length === 0 ? (
             <li className="p-6 text-sm text-[var(--muted)]">
               Проектов пока нет.{" "}
@@ -299,7 +302,7 @@ export default async function ProjectsPage({
                     </Link>
                     <Link
                       href={`/app/projects/${project.id}/estimates/${draft.id}`}
-                      className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-white"
+                      className="rounded-[var(--radius-button)] bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold text-[var(--brand-foreground)]"
                     >
                       Открыть смету
                     </Link>

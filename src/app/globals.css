@@ -1,32 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f3f6f4;
-  --fg: #1c2421;
-  --muted: #5a6b64;
-  --accent: #0f766e;
-  --accent-2: #1d4e89;
-  --surface: #ffffff;
-  --border: #d5e0db;
-  --danger: #b42318;
+  /* QuatHub UI kit surfaces */
+  --page: #e2e2e2;
+  --page-background: var(--page);
+  --header-background: #ecede9;
+  --header: var(--header-background);
+  --header-height: 64px;
+  --panel: #f7f8f4;
+  --panel-background: var(--panel);
+  --control: #ffffff;
+  --control-background: var(--control);
+  --surface: var(--control);
+  --surface-subtle: #eef0ea;
+  --surface-dark: #1c1f19;
+
+  --brand: #d9fe54;
+  --brand-foreground: #11130d;
+  --text-primary: #11130d;
+  --text-secondary: #596052;
+  --text-inverse: #f7f8f3;
+  --text-muted-on-dark: #aeb3a7;
+  --border: #ced2c8;
+  --focus-ring: #444f28;
+  --success: #d9fe54;
+  --error: #ff5c57;
+  --warning: #ffc857;
+  --info: #6ea8fe;
+  --neutral: #aeb3a7;
+  --toast: rgba(28, 31, 25, 0.94);
+
+  --radius-button: 10px;
+  --radius-input: 10px;
+  --radius-panel: 14px;
+  --radius-card: var(--radius-panel);
+  --radius-toast: 14px;
+  --motion-fast: 180ms;
+  --motion-normal: 300ms;
+  --workspace-gap: 24px;
+  --workspace-pad: 24px;
+  --workspace-pad-mobile: 16px;
+  --panel-pad: 24px;
+  --panel-pad-mobile: 20px;
+  --toolbar-gap: 14px;
+
+  /* Legacy aliases */
+  --bg: var(--page);
+  --fg: var(--text-primary);
+  --muted: var(--text-secondary);
+  --accent: var(--brand);
+  --accent-2: var(--focus-ring);
+  --danger: var(--error);
   --font-sans: "Manrope", system-ui, sans-serif;
-  --font-display: "Source Serif 4", Georgia, serif;
+  --font-display: "Manrope", system-ui, sans-serif;
 }
 
 @theme inline {
-  --color-background: var(--bg);
-  --color-foreground: var(--fg);
+  --color-background: var(--page);
+  --color-foreground: var(--text-primary);
+  --color-header: var(--header-background);
+  --color-panel: var(--panel);
+  --color-control: var(--control);
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
 }
 
 body {
   font-family: var(--font-sans);
-  background:
-    radial-gradient(1200px 500px at 10% -10%, #d8eee8 0%, transparent 55%),
-    radial-gradient(900px 400px at 100% 0%, #d9e4f2 0%, transparent 50%),
-    var(--bg);
-  color: var(--fg);
+  background: var(--page);
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.45;
 }
 
 a {
@@ -35,8 +79,22 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .sr-only {
@@ -49,4 +107,130 @@ a {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* Workspace + panel layout
+ * Desktop-first: if media queries fail to load, desktop estimate stays visible.
+ * Breakpoint: 1000px viewport width (single source of truth).
+ */
+.qh-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(380px, 2fr);
+  gap: 24px;
+  padding: 24px;
+  background: #e2e2e2;
+  min-width: 0;
+  min-height: calc(100dvh - var(--header-height, 64px));
+  height: calc(100dvh - var(--header-height, 64px));
+  max-height: calc(100dvh - var(--header-height, 64px));
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.qh-workspace > * {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+}
+
+.qh-catalog-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  background: #f7f8f4;
+  border: 1px solid #ced2c8;
+  border-radius: 14px;
+}
+
+.qh-panel {
+  background: #f7f8f4;
+  border: 1px solid #ced2c8;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.qh-panel-header {
+  padding: 20px 24px;
+}
+
+.qh-panel-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+}
+
+.qh-panel-toolbar.qh-panel-toolbar--flush {
+  padding-top: 0;
+}
+
+.qh-catalog-row {
+  padding: 18px 24px;
+  box-sizing: border-box;
+}
+
+.qh-estimate-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.qh-estimate-footer {
+  padding: 20px 24px;
+}
+
+/* Desktop defaults — estimate column ON, mobile bar OFF */
+.qh-estimate-col {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+}
+
+.qh-estimate-mobile-bar {
+  display: none !important;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Mobile: viewport < 1000px */
+@media (max-width: 999.98px) {
+  .qh-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+    padding-bottom: calc(16px + 5.5rem + env(safe-area-inset-bottom, 0px));
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .qh-workspace > * {
+    height: auto;
+    max-height: none;
+  }
+
+  .qh-estimate-col {
+    display: none !important;
+  }
+
+  .qh-estimate-mobile-bar {
+    display: block !important;
+  }
 }
